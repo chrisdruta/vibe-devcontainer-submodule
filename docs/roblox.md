@@ -7,7 +7,7 @@ materializes its own tools.
 ## Install
 
 ```bash
-~/dev/vibecode-devcontainer/install.sh --preset roblox ~/dev/my-roblox-game
+~/dev/vibe-devcontainer-submodule/install.sh --preset roblox ~/dev/my-roblox-game
 ```
 
 The `roblox` preset uses the Python 3.14 base image (for build/pipeline scripting

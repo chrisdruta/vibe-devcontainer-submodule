@@ -11,10 +11,10 @@
 ## Install
 
 ```bash
-git clone https://github.com/chrisdruta/vibecode-devcontainer-submodule.git \
-  ~/dev/vibecode-devcontainer
+git clone https://github.com/chrisdruta/vibe-devcontainer-submodule.git \
+  ~/dev/vibe-devcontainer-submodule
 
-~/dev/vibecode-devcontainer/install.sh --preset python ~/dev/my-project
+~/dev/vibe-devcontainer-submodule/install.sh --preset python ~/dev/my-project
 ```
 
 The installer:
@@ -41,7 +41,7 @@ If the scaffold clone has no `origin` remote (e.g. you are hacking on a local co
 its local path is used as the submodule URL; switch later with:
 
 ```bash
-git submodule set-url .devcontainer/harness https://github.com/chrisdruta/vibecode-devcontainer-submodule.git
+git submodule set-url .devcontainer/harness https://github.com/chrisdruta/vibe-devcontainer-submodule.git
 ```
 
 ## First start
