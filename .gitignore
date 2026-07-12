@@ -1,0 +1,3 @@
+*.log
+.devcontainer.backup.*
+docs/initial-gpt-log.md
