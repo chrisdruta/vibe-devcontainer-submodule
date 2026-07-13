@@ -122,6 +122,7 @@ Full threat model: [docs/security.md](docs/security.md).
 - [Security model](docs/security.md)
 - [Local models (Ollama on the host)](docs/local-models.md)
 - [Roblox integration recipe](docs/roblox.md)
+- [Browser automation recipe (playwright-cli)](docs/browser-automation.md)
 - [Architecture & contributing](docs/architecture.md)
 
 ## License

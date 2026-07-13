@@ -70,7 +70,9 @@ freeze them.
 
 Policy: small CLI tools may be build arguments; large ecosystems and service
 dependencies (Blender, databases, browsers) belong in Dev Container Features or
-project-owned layers, not the shared Dockerfile.
+project-owned layers, not the shared Dockerfile. The harness ships one such
+feature: `features/playwright-deps` for headless-browser automation — see
+[browser-automation.md](browser-automation.md).
 
 ## Secrets
 
