@@ -22,7 +22,8 @@ shell_files=(
 )
 while IFS= read -r -d '' file; do
   shell_files+=("$file")
-done < <(find "$repo_root/scripts" "$repo_root/templates/project" -type f -name '*.sh' -print0)
+done < <(find "$repo_root/scripts" "$repo_root/templates/project" "$repo_root/features" \
+  -type f -name '*.sh' -print0)
 
 for file in "${shell_files[@]}"; do
   bash -n "$file"
@@ -33,6 +34,11 @@ if command -v shellcheck >/dev/null 2>&1; then
 else
   echo "SKIP: shellcheck not installed"
 fi
+
+# Dev Container Feature manifests must be valid JSON.
+for manifest in "$repo_root"/features/*/devcontainer-feature.json; do
+  json_check "$manifest"
+done
 
 # Host-side scripts must stay bash-3.2 compatible (stock macOS bash).
 host_side_files=(install.sh verify.sh dev templates/dev scripts/host/start-ollama.sh)

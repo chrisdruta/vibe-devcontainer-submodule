@@ -14,12 +14,17 @@ Verified against a Next.js project (nimbus) on the Debian base image, amd64.
 
 ## Per-project recipe
 
-1. **`devcontainer.json`** — reference the feature (requires `INSTALL_NODE=true`
-   and a JS runtime for `bunx`/`npx`) and persist browser downloads across
-   rebuilds:
+1. **`devcontainer.json`** — set `"INSTALL_NODE": "true"` in `build.args` (the
+   feature build and `npx` need Node; the bun preset seeds it `false`),
+   reference the feature, and persist browser downloads across rebuilds:
 
    ```jsonc
+   "build": {
+     "args": { "INSTALL_NODE": "true" /* ...existing args... */ }
+   },
    "features": {
+     // Optionally pin the playwright version that resolves the apt
+     // dependency list: { "version": "1.50.1" }. Default: latest.
      "./harness/features/playwright-deps": {}
    },
    "containerEnv": {

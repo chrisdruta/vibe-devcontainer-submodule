@@ -30,6 +30,7 @@ my-project/.devcontainer/
     ├── dev             # launcher (repo-agnostic)
     ├── scripts/        # lifecycle: lib, post-create, post-start, doctor, env-run
     ├── scripts/host/   # WSL-host helpers (start-ollama.sh)
+    ├── features/       # opt-in Dev Container Features (build-time apt installs)
     └── templates/      # seeds for the project-owned files (install-time only)
 ```
 

@@ -62,6 +62,8 @@ consuming project — bias toward small, reviewable, backward-compatible commits
 - `scripts/` — shared runtime lifecycle (`lib.sh` holds path discovery: the project
   root is anchored on `.devcontainer/`, NOT `git rev-parse` inside the submodule)
 - `scripts/host/` — WSL-host helpers, not container code
+- `features/` — harness-shipped Dev Container Features (build-time root installs that
+  cannot happen post-create); consumed opt-in from project `devcontainer.json`
 - `templates/` — seeds for project-owned files; placeholder-rendered by `install.sh`
 - `verify.sh` — regression checks
 
