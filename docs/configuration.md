@@ -56,7 +56,7 @@ sidecars for databases and long-running dependencies.
 "args": {
   "BASE_IMAGE": "mcr.microsoft.com/devcontainers/base:debian",
   "INSTALL_CLAUDE_CODE": "true",
-  "INSTALL_CODEX": "false",   // OpenAI Codex CLI (pulls in Node)
+  "INSTALL_CODEX": "false",   // OpenAI Codex CLI (pulls in Node; also bundles the Codex plugin for Claude Code)
   "INSTALL_GROK": "false",    // xAI Grok Build
   "INSTALL_NODE": "false",
   "INSTALL_BUN": "false",
@@ -96,6 +96,7 @@ Nothing auto-sources `.env`; `.bashrc` is never modified. Load explicitly:
 
 ```bash
 ./.devcontainer/dev agent            # loads DEV_ENV_FILE, then runs DEV_AGENT_CMD
+./.devcontainer/dev agent --cold     # same, but without repo instruction files (see usage.md)
 ./.devcontainer/dev run codex        # same, for any command
 ./.devcontainer/harness/scripts/env-run.sh some-command   # inside the container
 ```

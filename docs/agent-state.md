@@ -30,6 +30,17 @@ Agents can also invoke each other as subprocesses (e.g. Claude shelling out to
 `codex` or `grok` to cross-check work) — they share the workspace and the
 `.env`-loaded credentials of the process that spawned them.
 
+When both `claude` and `codex` are installed, post-create also installs OpenAI's
+[Codex plugin for Claude Code](https://github.com/openai/codex-plugin-cc) into the
+state volume (user scope — nothing lands in the project repo). Claude Code sessions
+then get `/codex:review`, `/codex:adversarial-review`, `/codex:rescue`,
+`/codex:transfer`, and job management (`/codex:status`, `/codex:result`,
+`/codex:cancel`), all riding on the container's `codex` login. The install needs the network once;
+if container creation happens offline it warns and moves on — rerun post-create or
+`claude plugin install codex@openai-codex` later. Remove it with
+`claude plugin uninstall codex@openai-codex` (note: the next container *rebuild*
+reinstalls it as long as the Codex CLI is in the image).
+
 Grok's binary is materialized into `~/.local/bin` at image build time (its installer
 would otherwise symlink into `~/.grok/downloads`, which the volume shadows); its
 self-update therefore does not stick — update Grok by rebuilding the image.

@@ -30,6 +30,19 @@ if command -v claude >/dev/null 2>&1; then
   fi
 fi
 
+# Codex plugin for Claude Code (/codex:review etc.) rides on the opt-in Codex CLI.
+# User scope keeps plugin state in the persistent ~/.agents volume, not the project.
+# The install needs the network, so a failure warns instead of failing bootstrap.
+if command -v claude >/dev/null 2>&1 && command -v codex >/dev/null 2>&1; then
+  if ! claude plugin list --json 2>/dev/null | jq -e 'any(.[]; .id == "codex@openai-codex")' >/dev/null; then
+    log "Installing Codex plugin for Claude Code"
+    if ! { claude plugin marketplace add openai/codex-plugin-cc \
+        && claude plugin install codex@openai-codex --scope user; }; then
+      warn "Codex plugin install failed; retry later with: claude plugin install codex@openai-codex"
+    fi
+  fi
+fi
+
 if [[ "$DEV_AUTO_INSTALL" == "1" ]]; then
   if [[ -f pyproject.toml && -f uv.lock ]]; then
     require_command uv
