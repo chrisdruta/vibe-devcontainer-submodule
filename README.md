@@ -66,9 +66,10 @@ Or open the repository in VS Code and choose **Reopen in Container**.
 | Command         | Does                                                     |
 | --------------- | -------------------------------------------------------- |
 | `dev up`        | Build/start the container                                 |
-| `dev agent`     | Run the default agent with explicit `.env` loading        |
+| `dev agent`     | Run the default agent with explicit `.env` loading (`--cold`: no repo instruction files; `-a CMD`: pick the agent) |
 | `dev run CMD`   | Run any command with explicit `.env` loading              |
 | `dev shell`     | Open a Bash shell inside the container                    |
+| `dev clip`      | Save the host clipboard image for the container (image-paste workaround) |
 | `dev doctor`    | Check the environment (run this first when things break)  |
 | `dev rebuild`   | Recreate after editing `devcontainer.json`/Dockerfile     |
 

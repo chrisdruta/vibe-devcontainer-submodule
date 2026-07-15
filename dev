@@ -45,14 +45,58 @@ case "$command_name" in
     # dropped terminal, and a second `dev agent` reattaches (-A) instead of
     # double-launching. `.env` still loads only inside the pane process via
     # env-run.sh — never into the tmux server or an interactive shell.
+    # --cold starts the agent without repo instruction files (CLAUDE.md/AGENTS.md
+    # and .claude customizations) for an unbiased session. -a/--agent overrides
+    # DEV_AGENT_CMD for this invocation (e.g. dev agent -a codex). Either variant
+    # gets its own tmux session so it never reattaches to the default warm one.
+    cold=0
+    agent_override=""
+    while [ "$#" -gt 0 ]; do
+      case "$1" in
+        --cold)
+          cold=1
+          shift
+          ;;
+        -a|--agent)
+          if [ "$#" -lt 2 ]; then
+            echo "Usage: .devcontainer/dev agent [--cold] [-a|--agent COMMAND] [ARGUMENT ...]" >&2
+            exit 2
+          fi
+          agent_override="$2"
+          shift 2
+          ;;
+        *)
+          break
+          ;;
+      esac
+    done
     # shellcheck disable=SC2016  # expansion happens inside the container shell
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
       bash -lc 'source .devcontainer/config.env
-        cmd=(.devcontainer/harness/scripts/env-run.sh ${DEV_AGENT_CMD:-claude} "$@")
-        if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
-          exec tmux new-session -A -s "${DEV_AGENT_TMUX_SESSION:-agent}" "$(printf "%q " "${cmd[@]}")"
+        cold="$1"; agent_override="$2"; shift 2
+        session="${DEV_AGENT_TMUX_SESSION:-agent}"
+        if [ -n "$agent_override" ]; then
+          agent_cmd=($agent_override)
+          session="$session-${agent_cmd[0]}"
+        else
+          agent_cmd=(${DEV_AGENT_CMD:-claude})
         fi
-        exec "${cmd[@]}"' _ "$@"
+        if [ "$cold" = "1" ]; then
+          case "${agent_cmd[0]}" in
+            claude) agent_cmd+=(--safe-mode) ;;
+            codex)  agent_cmd+=(-c project_doc_max_bytes=0) ;;
+            *)
+              echo "dev agent --cold: no known instruction-skip flags for: ${agent_cmd[0]}" >&2
+              exit 2
+              ;;
+          esac
+          session="$session-cold"
+        fi
+        cmd=(.devcontainer/harness/scripts/env-run.sh "${agent_cmd[@]}" "$@")
+        if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
+          exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")"
+        fi
+        exec "${cmd[@]}"' _ "$cold" "$agent_override" "$@"
     ;;
   doctor)
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
@@ -71,6 +115,11 @@ case "$command_name" in
     (($#)) || { echo "Usage: .devcontainer/dev exec COMMAND [ARGUMENT ...]" >&2; exit 2; }
     exec "${cli[@]}" exec --workspace-folder "$repo_root" "$@"
     ;;
+  clip)
+    # Host-side: grabs the OS clipboard image; container /tmp by default, or a
+    # workspace-relative directory when given (dev clip .captures).
+    exec bash "$self_dir/scripts/host/clip-image.sh" "$repo_root" "${1:-}" "${cli[@]}"
+    ;;
   help|-h|--help)
     cat <<'HELP'
 Usage: .devcontainer/dev COMMAND [ARGUMENT ...]
@@ -81,10 +130,13 @@ Commands:
   build       Build the Dev Container image
   shell       Open a Bash shell in the container
   agent       Run the configured default agent with explicit .env loading
+              (--cold: skip CLAUDE.md/AGENTS.md and .claude customizations;
+               -a/--agent CMD: run CMD instead of DEV_AGENT_CMD, e.g. -a codex)
   run         Run any command with explicit .env loading (e.g. dev run grok)
   doctor      Check the active environment
   bootstrap   Rerun create-time dependency setup
   exec        Run an arbitrary command in the container (no .env loading)
+  clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
 HELP
     ;;
   *)

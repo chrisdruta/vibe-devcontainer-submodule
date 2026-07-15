@@ -12,11 +12,12 @@ All commands run from the project root via the seeded wrapper:
 | `rebuild`   | Recreate the container — required after editing `devcontainer.json` or the Dockerfile |
 | `build`     | Build the image only                                                   |
 | `shell`     | Open a Bash shell in the container                                     |
-| `agent`     | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session |
+| `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
 | `run CMD`   | Run any command with explicit `.env` loading (e.g. `dev run codex`)    |
 | `exec CMD`  | Run any command **without** `.env` loading                             |
 | `doctor`    | Check the environment; prints OK/MISS per requirement                  |
 | `bootstrap` | Rerun create-time dependency setup (idempotent)                        |
+| `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 
 The launcher uses a locally installed `devcontainer` CLI, falling back to
 `npx -y @devcontainers/cli`. It is repo-agnostic — a host-wide symlink also works
@@ -49,6 +50,62 @@ Run several agents side by side in tmux (installed in the image):
 tmux
 # pane 1: claude    pane 2: codex    pane 3: grok
 ```
+
+## Cold sessions (fresh perspective)
+
+`dev agent --cold` starts the agent without the repo's instruction files, for an
+unbiased second opinion — reviewing a design without the repo's conventions
+arguing back, or checking whether docs stand on their own:
+
+- **Claude Code** runs with `--safe-mode`: no CLAUDE.md/AGENTS.md memory, and all
+  `.claude/` customizations (skills, plugins, hooks, MCP servers, statusline) are
+  off for the session. Auth, model, built-in tools, and permissions are normal.
+- **Codex** (`DEV_AGENT_CMD=codex`) runs with `-c project_doc_max_bytes=0`, which
+  drops all AGENTS.md loading.
+- Agents with no known instruction-skip mechanism (e.g. Grok) refuse with an
+  error instead of silently running warm.
+
+Remaining arguments pass through (`dev agent --cold --continue`), and it
+composes with the per-invocation agent selector:
+
+```bash
+./.devcontainer/dev agent -a codex          # Codex session (DEV_AGENT_CMD untouched)
+./.devcontainer/dev agent --cold -a codex   # Codex without AGENTS.md
+./.devcontainer/dev agent -a "codex --model gpt-5"   # override may carry arguments
+```
+
+With `DEV_AGENT_TMUX=1` each variant uses its own tmux session — `agent`,
+`agent-cold`, `agent-codex`, `agent-codex-cold` — so runs never reattach to the
+wrong session and can happily run side by side.
+
+## Pasting images to an agent
+
+Ctrl-V image paste cannot work inside the container: the agent reads the OS
+clipboard from its own process, and the container has no WSL interop or display
+server to reach it (the terminal only ever sends text down the pty). Instead,
+with an image on the host clipboard, run on the host:
+
+```bash
+./.devcontainer/dev clip
+# In the container: /tmp/clip-20260715-093042.png
+# (path copied to clipboard)
+```
+
+The image lands in the container's `/tmp` (nothing is written to the repo), and
+the printed path replaces the image on the host clipboard — paste it straight
+into the agent prompt. Works on WSL (PowerShell) and macOS (AppleScript); the
+container must be running. Files vanish on rebuild, as `/tmp` is
+container-local.
+
+To keep captures instead, pass a workspace-relative directory — the image is
+written straight through the bind mount (no running container required):
+
+```bash
+./.devcontainer/dev clip .captures
+# Saved: .captures/clip-20260715-093042.png
+```
+
+Gitignore the directory if you use this mode routinely.
 
 ## Troubleshooting
 
