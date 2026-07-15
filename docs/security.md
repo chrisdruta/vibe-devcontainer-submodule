@@ -29,6 +29,13 @@ Root maintenance remains possible from the host: `docker exec -u root -it <c> ba
   (`npm ci` postinstall scripts, `uv sync` build hooks, etc.).
 - **The network.** Outbound access is unrestricted by default.
 
+Per-project agent-state volumes compartmentalize what a compromise reaches: an
+agent run in one project cannot read another project's OAuth tokens or session
+history. Pointing multiple projects at one shared volume (the `source=` edit in
+[agent-state.md](agent-state.md)) extends any single project's compromise to
+every credential and session in it — see
+[positioning.md](positioning.md#why-logins-are-per-project).
+
 ## The git-hooks host boundary leak
 
 `DEV_AUTO_GIT_HOOKS=1` runs `git config --local core.hooksPath .githooks` during

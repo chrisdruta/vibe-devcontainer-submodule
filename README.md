@@ -145,6 +145,7 @@ Full threat model: [docs/security.md](docs/security.md).
 - [Agent state & multi-agent use](docs/agent-state.md)
 - [Updating the harness](docs/updating.md)
 - [Security model](docs/security.md)
+- [Positioning & non-goals](docs/positioning.md)
 - [Local models (Ollama on the host)](docs/local-models.md)
 - [Roblox integration recipe](docs/roblox.md)
 - [Browser automation recipe (playwright-cli)](docs/browser-automation.md)

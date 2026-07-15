@@ -12,7 +12,8 @@ agent-state-<workspace-folder-basename>
 ```
 
 Log in to each agent once per project; logins survive `dev rebuild` and image
-upgrades. The volume mountpoint is pre-created in the image owned by `vscode` —
+upgrades. Per-project logins are deliberate compartmentalization, not an
+accident — see [positioning.md](positioning.md). The volume mountpoint is pre-created in the image owned by `vscode` —
 necessary because with sudo removed and all capabilities dropped, a root-owned
 volume could never be repaired from inside the container.
 
@@ -54,6 +55,10 @@ The volume name uses only the workspace folder **basename**:
 - Two projects whose folders share a basename (e.g. `~/dev/a/app` and `~/dev/b/app`)
   **collide** on the same volume — rename one folder, or change the volume `source=`
   in that project's `devcontainer.json` to a unique key.
+- The same `source=` edit can also **deliberately** share one volume — logins and
+  session history included — across projects. That trades away per-project
+  isolation; see [positioning.md](positioning.md#why-logins-are-per-project)
+  before doing it.
 
 ## Resetting state
 

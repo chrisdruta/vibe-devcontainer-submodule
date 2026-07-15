@@ -5,6 +5,11 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Docs: [positioning.md](docs/positioning.md)** — the layer this harness
+  occupies vs. agent loops and orchestrator UIs, its principles and non-goals,
+  and the recorded decision to keep auth agent-native and per-project (no
+  centralized credential store); cross-linked from agent-state and security
+  docs.
 - **`dev agent --cold`**: fresh-perspective agent session without repo instruction
   files — Claude via `--safe-mode`, Codex via `-c project_doc_max_bytes=0`; agents
   without a known skip mechanism refuse. Cold runs get their own tmux session

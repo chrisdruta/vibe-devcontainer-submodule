@@ -24,6 +24,9 @@ consuming project — bias toward small, reviewable, backward-compatible commits
   (nothing in the running container can fix a root-owned volume).
 - Anything installed for an agent CLI must survive the runtime volume mount at
   `~/.agents` — binaries go to `~/.local/bin`, never under `~/.agents` or `~/.grok`.
+- Agents own their auth natively: the harness only points each CLI's config dir
+  at the per-project state volume — it never centralizes, brokers, or
+  bind-mounts credentials (see `docs/positioning.md`).
 - Pin tool versions in Dockerfile ARGs where the upstream supports it; only
   Claude Code (`stable`) and Grok Build (latest stable) are deliberately mutable.
 - Host-side scripts (`dev`, `templates/dev`, `install.sh`, `verify.sh`,
