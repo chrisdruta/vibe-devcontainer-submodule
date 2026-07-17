@@ -51,6 +51,49 @@ done
   newly installed projects; your project-owned files are never rewritten —
   re-run `install.sh --force` if you want a fresh seed, your old files are backed up).
 
+## Agent-driven update
+
+Moving the pin is mechanical; reconciling the project-owned seeded files with
+what new versions expect (new `containerEnv` keys, settings denies, wrapper
+changes) is the judgment-call part — like [onboarding](onboarding.md), a good
+job for an agent. Paste into an agent at the project root:
+
+```text
+Update this project's vibe-devcontainer-submodule harness pin and reconcile
+the project-owned files with the new version.
+
+1. In .devcontainer/harness: git fetch --tags, then report the current pin
+   (git describe --tags) and the latest tag. Before touching anything, read
+   the harness CHANGELOG.md entries between those two versions and
+   docs/updating.md — especially any "Crossing ..." migration sections that
+   apply to this jump.
+2. Check out the latest tag in the submodule and stage the pin move.
+3. Reconcile the project-owned files against the new templates in
+   .devcontainer/harness/templates/:
+   - devcontainer.json: adopt new containerEnv keys and build args from the
+     template (e.g. GH_CONFIG_DIR as of v0.4.0);
+   - config.env: adopt new toggles, keeping the project's current values;
+   - the wrapper: copy templates/vibe over .devcontainer/vibe — and if this
+     project still has .devcontainer/dev (pre-v0.4.0), git mv it to vibe
+     first;
+   - .claude/settings.json: merge new permission denies and statusline keys
+     from templates/claude-settings.json without clobbering existing entries.
+   Reconcile, don't reset: where the template and the project disagree, keep
+   the project's value and flag it in your report.
+4. Never weaken hardening while reconciling: no sudo, no docker-socket
+   mounts, no published ports.
+5. Verify with vibe doctor. If the Dockerfile or devcontainer.json changed, a
+   rebuild is required — run ./.devcontainer/vibe rebuild on the host; if you
+   are running inside the container, stage everything and ask the user to
+   rebuild instead.
+6. Commit the pin move and the reconciliations together. Report: old -> new
+   version, each file changed and why, and anything in the changelog that
+   needs a human decision.
+```
+
+Review the diff before pushing — the seeded files are project-owned, and the
+agent is instructed to prefer your values over the templates on conflict.
+
 ## Crossing the v0.4.0 rename from an older install
 
 The launcher was renamed `dev` → `vibe` in v0.4.0 and the back-compat shim was

@@ -3,6 +3,14 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## Unreleased
+
+- **Agent-driven update prompt** in [updating.md](docs/updating.md): paste-ready
+  prompt that moves the pin, reads the changelog between versions, reconciles
+  the project-owned seeded files against the new templates (project values win
+  on conflict), and reports what needs a human decision. Companion to the
+  onboarding prompt; linked from the README.
+
 ## v0.5.0 — 2026-07-17
 
 - **`dev` back-compat shim removed**: `harness/dev` is gone and the seeded

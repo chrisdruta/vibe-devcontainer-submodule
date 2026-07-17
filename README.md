@@ -101,7 +101,10 @@ git -C .devcontainer/harness checkout v0.1.0
 git add .devcontainer/harness && git commit -m "Update devcontainer harness to v0.1.0"
 ```
 
-Branch-following convenience and caveats: [docs/updating.md](docs/updating.md).
+Branch-following convenience and caveats: [docs/updating.md](docs/updating.md) —
+including a paste-ready agent prompt that moves the pin and reconciles the
+project-owned files (new containerEnv keys, settings merges, wrapper changes)
+for you.
 
 ## Dogfooding
 
