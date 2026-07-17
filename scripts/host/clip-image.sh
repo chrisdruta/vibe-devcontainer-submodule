@@ -9,7 +9,7 @@
 # clipboard is unreachable — no terminal or tmux setting can fix that (the
 # terminal only ever sends TEXT down the pty).
 #
-# Invoked by `dev clip [DIR]` on the host (WSL or macOS). By default the PNG is
+# Invoked by `vibe clip [DIR]` on the host (WSL or macOS). By default the PNG is
 # streamed into the running container's /tmp over `devcontainer exec` (nothing
 # lands in the repo, gone on rebuild). With DIR — a workspace-relative directory
 # — it is written straight into the bind-mounted repo instead (persists; no
@@ -20,7 +20,7 @@ set -euo pipefail
 
 if [ "$#" -lt 3 ]; then
   echo "Usage: clip-image.sh REPO_ROOT DEST_DIR_OR_EMPTY DEVCONTAINER_CLI [CLI_ARG ...]" >&2
-  echo "(normally invoked via: .devcontainer/dev clip [DIR])" >&2
+  echo "(normally invoked via: .devcontainer/vibe clip [DIR])" >&2
   exit 2
 fi
 repo_root="$1"

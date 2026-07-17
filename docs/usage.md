@@ -1,9 +1,10 @@
 # Daily usage
 
-All commands run from the project root via the seeded wrapper:
+All commands run via the seeded wrapper — or as plain `vibe` with the
+[global install](#global-install) below:
 
 ```bash
-./.devcontainer/dev COMMAND [ARGS...]
+./.devcontainer/vibe COMMAND [ARGS...]
 ```
 
 | Command     | Does                                                                  |
@@ -13,47 +14,63 @@ All commands run from the project root via the seeded wrapper:
 | `build`     | Build the image only                                                   |
 | `shell`     | Open a Bash shell in the container                                     |
 | `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
-| `run CMD`   | Run any command with explicit `.env` loading (e.g. `dev run codex`)    |
+| `run CMD`   | Run any command with explicit `.env` loading (e.g. `vibe run codex`)    |
 | `exec CMD`  | Run any command **without** `.env` loading                             |
 | `doctor`    | Check the environment; prints OK/MISS per requirement                  |
 | `bootstrap` | Rerun create-time dependency setup (idempotent)                        |
 | `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 
 The launcher uses a locally installed `devcontainer` CLI, falling back to
-`npx -y @devcontainers/cli`. It is repo-agnostic — a host-wide symlink also works
-(`ln -s ~/dev/my-project/.devcontainer/harness/dev ~/.local/bin/dev`), resolving
-the project from its own location.
+`npx -y @devcontainers/cli`.
+
+## Global install
+
+The launcher targets the nearest ancestor of the current directory with a
+`.devcontainer/devcontainer.json`, so one symlink on the host `PATH` serves
+every harness project:
+
+```bash
+ln -s ~/dev/any-project/.devcontainer/harness/vibe ~/.local/bin/vibe
+cd ~/dev/other-project && vibe agent    # targets other-project
+```
+
+Only when run from outside any project does it fall back to the project the
+script itself lives in.
+
+Container commands (`agent`, `shell`, `run`, `exec`, `doctor`, `bootstrap`,
+`clip`) start the container automatically when it isn't running — a cold
+`vibe agent` is the whole morning routine. Start-up progress goes to stderr,
+so `vibe run` output stays pipeable.
 
 ## Typical day
 
 ```bash
-./.devcontainer/dev up          # morning: container resumes, doctor runs
-./.devcontainer/dev agent       # interactive Claude session
-./.devcontainer/dev exec uv run pytest
+vibe agent                       # starts the container if needed, attaches Claude
+vibe exec uv run pytest
 ```
 
 ## tmux
 
 With `DEV_AGENT_TMUX=1` in `config.env` (the seeded default for new installs),
-`dev agent` runs inside a tmux session named `agent` (`DEV_AGENT_TMUX_SESSION`):
+`vibe agent` runs inside a tmux session named `agent` (`DEV_AGENT_TMUX_SESSION`):
 
 - **Detach** with `Ctrl-b d` — the agent keeps running; closing the terminal or
   losing the connection also leaves it running.
-- **Reattach** by rerunning `./.devcontainer/dev agent` (arguments are ignored
+- **Reattach** by rerunning `./.devcontainer/vibe agent` (arguments are ignored
   when an existing session is attached; the session ends when the agent exits).
-- **One-off plain run**: `dev run claude`, or set `DEV_AGENT_TMUX=0`.
+- **One-off plain run**: `vibe run claude`, or set `DEV_AGENT_TMUX=0`.
 
 Run several agents side by side in tmux (installed in the image):
 
 ```bash
-./.devcontainer/dev shell
+./.devcontainer/vibe shell
 tmux
 # pane 1: claude    pane 2: codex    pane 3: grok
 ```
 
 ## Cold sessions (fresh perspective)
 
-`dev agent --cold` starts the agent without the repo's instruction files, for an
+`vibe agent --cold` starts the agent without the repo's instruction files, for an
 unbiased second opinion — reviewing a design without the repo's conventions
 arguing back, or checking whether docs stand on their own:
 
@@ -65,13 +82,13 @@ arguing back, or checking whether docs stand on their own:
 - Agents with no known instruction-skip mechanism (e.g. Grok) refuse with an
   error instead of silently running warm.
 
-Remaining arguments pass through (`dev agent --cold --continue`), and it
+Remaining arguments pass through (`vibe agent --cold --continue`), and it
 composes with the per-invocation agent selector:
 
 ```bash
-./.devcontainer/dev agent -a codex          # Codex session (DEV_AGENT_CMD untouched)
-./.devcontainer/dev agent --cold -a codex   # Codex without AGENTS.md
-./.devcontainer/dev agent -a "codex --model gpt-5"   # override may carry arguments
+./.devcontainer/vibe agent -a codex          # Codex session (DEV_AGENT_CMD untouched)
+./.devcontainer/vibe agent --cold -a codex   # Codex without AGENTS.md
+./.devcontainer/vibe agent -a "codex --model gpt-5"   # override may carry arguments
 ```
 
 With `DEV_AGENT_TMUX=1` each variant uses its own tmux session — `agent`,
@@ -86,7 +103,7 @@ server to reach it (the terminal only ever sends text down the pty). Instead,
 with an image on the host clipboard, run on the host:
 
 ```bash
-./.devcontainer/dev clip
+./.devcontainer/vibe clip
 # In the container: /tmp/clip-20260715-093042.png
 # (path copied to clipboard)
 ```
@@ -101,7 +118,7 @@ To keep captures instead, pass a workspace-relative directory — the image is
 written straight through the bind mount (no running container required):
 
 ```bash
-./.devcontainer/dev clip .captures
+./.devcontainer/vibe clip .captures
 # Saved: .captures/clip-20260715-093042.png
 ```
 
@@ -109,12 +126,12 @@ Gitignore the directory if you use this mode routinely.
 
 ## Troubleshooting
 
-- **Start with `dev doctor`.** It verifies non-root execution, workspace
+- **Start with `vibe doctor`.** It verifies non-root execution, workspace
   writability, required commands (`DEV_REQUIRED_COMMANDS`), the agent command,
   and the absence of the Docker socket and passwordless sudo. Its output is also
   logged to `/tmp/dev-doctor.log` inside the container on every start.
 - **Changed `devcontainer.json` or the Dockerfile and nothing happened?**
-  `dev up` reuses an existing container; run `dev rebuild`.
+  `vibe up` reuses an existing container; run `vibe rebuild`.
 - **`Harness submodule is missing`** — run `git submodule update --init`.
 - **Bootstrap fails loudly** — that is `DEV_BOOTSTRAP_STRICT=1` doing its job:
   a detected manifest's tool is missing. Install the tool via build args or set

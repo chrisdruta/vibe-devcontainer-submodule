@@ -7,7 +7,7 @@ Usage: install.sh [OPTIONS] [TARGET]
 
 Sets up TARGET (default: current directory) to use this harness:
   - adds this repository as a git submodule at .devcontainer/harness
-  - seeds project-owned files: devcontainer.json, config.env, dev, project/ hooks
+  - seeds project-owned files: devcontainer.json, config.env, vibe, project/ hooks
 
 TARGET must be the top level of an existing git repository.
 
@@ -161,10 +161,10 @@ render() {
 
 render "$script_dir/templates/devcontainer.json" "$destination/devcontainer.json"
 render "$script_dir/templates/config.env" "$destination/config.env"
-cp -- "$script_dir/templates/dev" "$destination/dev"
+cp -- "$script_dir/templates/vibe" "$destination/vibe"
 cp -- "$script_dir/templates/agents.md" "$destination/AGENTS.md"
 cp -a -- "$script_dir/templates/project" "$destination/project"
-chmod +x "$destination/dev" "$destination/project/"*.sh
+chmod +x "$destination/vibe" "$destination/project/"*.sh
 
 # Claude Code project settings (statusline, sudo-deny). Seeded only when the
 # project has none — an existing .claude/settings.json is never touched.
@@ -182,7 +182,7 @@ git -C "$target" -c protocol.file.allow=always \
 git -C "$target" add \
   .devcontainer/devcontainer.json \
   .devcontainer/config.env \
-  .devcontainer/dev \
+  .devcontainer/vibe \
   .devcontainer/AGENTS.md \
   .devcontainer/project
 if [[ $claude_settings_seeded -eq 1 ]]; then
@@ -193,7 +193,7 @@ fi
 # (Windows-side clones, some filesystems) `git add` records 644 and every
 # checkout would strip +x from the launchers.
 git -C "$target" update-index --chmod=+x \
-  .devcontainer/dev \
+  .devcontainer/vibe \
   .devcontainer/project/post-create.sh \
   .devcontainer/project/post-start.sh
 
@@ -211,5 +211,5 @@ echo "Next:"
 echo "  1. Review .devcontainer/devcontainer.json and config.env"
 echo "  2. Add '@.devcontainer/AGENTS.md' to the project's CLAUDE.md or AGENTS.md"
 echo "     so agents inherit the container rules (see docs/onboarding.md)"
-echo "  3. Run ./.devcontainer/dev up"
-echo "  4. Run ./.devcontainer/dev agent"
+echo "  3. Run ./.devcontainer/vibe up"
+echo "  4. Run ./.devcontainer/vibe agent"

@@ -17,8 +17,9 @@ json_check() {
 shell_files=(
   "$repo_root/install.sh"
   "$repo_root/verify.sh"
+  "$repo_root/vibe"
   "$repo_root/dev"
-  "$repo_root/templates/dev"
+  "$repo_root/templates/vibe"
 )
 while IFS= read -r -d '' file; do
   shell_files+=("$file")
@@ -41,7 +42,7 @@ for manifest in "$repo_root"/features/*/devcontainer-feature.json; do
 done
 
 # Host-side scripts must stay bash-3.2 compatible (stock macOS bash).
-host_side_files=(install.sh verify.sh dev templates/dev scripts/host/start-ollama.sh scripts/host/clip-image.sh)
+host_side_files=(install.sh verify.sh vibe dev templates/vibe scripts/host/start-ollama.sh scripts/host/clip-image.sh)
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
   for file in "${host_side_files[@]}"; do
     docker run --rm -v "$repo_root:/src:ro" bash:3.2 -n "/src/$file"
@@ -67,19 +68,19 @@ for preset in minimal python bun roblox; do
     commit -q --allow-empty -m init
   "$repo_root/install.sh" --preset "$preset" --url "$repo_root" "$target" >/dev/null
 
-  [[ -x "$target/.devcontainer/dev" ]]
+  [[ -x "$target/.devcontainer/vibe" ]]
   [[ -f "$target/.devcontainer/devcontainer.json" ]]
   [[ -f "$target/.devcontainer/config.env" ]]
   [[ -f "$target/.devcontainer/AGENTS.md" ]]
   [[ -f "$target/.claude/settings.json" ]]
   [[ -f "$target/.devcontainer/harness/Dockerfile" ]]
-  [[ -x "$target/.devcontainer/harness/dev" ]]
+  [[ -x "$target/.devcontainer/harness/vibe" ]]
   [[ -f "$target/.gitmodules" ]]
   json_check "$target/.devcontainer/devcontainer.json"
   json_check "$target/.claude/settings.json"
 
   # The exec bit must be recorded in the index (survives core.fileMode=false).
-  git -C "$target" ls-files -s .devcontainer/dev | grep -q '^100755'
+  git -C "$target" ls-files -s .devcontainer/vibe | grep -q '^100755'
 
   # No unrendered placeholders may survive.
   if grep -rn '@[A-Z_]*@' "$target/.devcontainer/devcontainer.json" "$target/.devcontainer/config.env"; then

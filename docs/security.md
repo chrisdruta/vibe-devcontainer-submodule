@@ -11,12 +11,12 @@ does not make running untrusted code safe.
 - Runs as `vscode`, never root; passwordless sudo is removed from the image
 - All Linux capabilities dropped (`--cap-drop=ALL`) and `no-new-privileges`
 - No Docker socket (`/var/run/docker.sock` is never mounted — a mounted socket is
-  effectively root on the host; `dev doctor` checks for it)
+  effectively root on the host; `vibe doctor` checks for it)
 - No SSH keys, no host home directory — only the workspace and the agent-state
   volume are mounted
 - No published ports
 - `.env` is never auto-sourced; secrets reach a process only through explicit
-  `dev agent` / `dev run` / `env-run.sh` invocation
+  `vibe agent` / `vibe run` / `env-run.sh` invocation
 
 Root maintenance remains possible from the host: `docker exec -u root -it <c> bash`.
 

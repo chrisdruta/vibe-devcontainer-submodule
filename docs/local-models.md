@@ -53,7 +53,7 @@ not part of the generic harness):
 "--add-host=host.docker.internal:host-gateway"
 ```
 
-Then `dev rebuild`. On Docker Desktop for Mac, `host.docker.internal` resolves
+Then `vibe rebuild`. On Docker Desktop for Mac, `host.docker.internal` resolves
 without this runArg — adding it anyway is harmless and keeps the project config
 portable across both hosts.
 
@@ -66,4 +66,4 @@ OPENAI_BASE_URL=http://host.docker.internal:11434/v1
 OPENAI_API_KEY=ollama   # placeholder; Ollama ignores it
 ```
 
-Anything started via `dev agent` / `dev run` picks these up.
+Anything started via `vibe agent` / `vibe run` picks these up.

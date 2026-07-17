@@ -13,7 +13,7 @@ git -C .devcontainer/harness checkout v0.1.0
 git diff --submodule .devcontainer/harness       # review what changed
 git add .devcontainer/harness
 git commit -m "Update devcontainer harness to v0.1.0"
-./.devcontainer/dev rebuild                      # if the Dockerfile changed
+./.devcontainer/vibe rebuild                      # if the Dockerfile changed
 ```
 
 Tags mark intentional upgrade points and rollback targets; rolling back is the same
@@ -45,8 +45,8 @@ done
 
 ## After updating
 
-- Run `./.devcontainer/dev doctor`.
-- Run `./.devcontainer/dev rebuild` when the update touched the `Dockerfile` or
+- Run `./.devcontainer/vibe doctor`.
+- Run `./.devcontainer/vibe rebuild` when the update touched the `Dockerfile` or
   anything under `templates/` you want re-rendered (template changes only affect
   newly installed projects; your project-owned files are never rewritten —
   re-run `install.sh --force` if you want a fresh seed, your old files are backed up).

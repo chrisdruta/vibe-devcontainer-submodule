@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Thin wrapper: the real launcher lives in the harness submodule.
+set -euo pipefail
+
+self_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+here="$(cd -- "$(dirname -- "$self_path")" && pwd)"
+
+# Prefer the current launcher name; fall back to the pre-rename one so this
+# wrapper also works while the harness pin predates the vibe rename.
+for launcher in vibe dev; do
+  if [[ -x "$here/harness/$launcher" ]]; then
+    exec "$here/harness/$launcher" "$@"
+  fi
+done
+
+echo "Harness submodule is missing or empty." >&2
+echo "Run: git submodule update --init" >&2
+exit 1

@@ -90,4 +90,4 @@ if [[ -f "$project_hook" ]]; then
   run_step "Running project post-create hook" bash "$project_hook"
 fi
 
-log "Bootstrap complete. Run: ./.devcontainer/dev doctor"
+log "Bootstrap complete. Run: ./.devcontainer/vibe doctor"

@@ -22,7 +22,7 @@ git clone https://github.com/chrisdruta/vibe-devcontainer-submodule.git \
 
 The installer:
 
-1. seeds the project-owned files (`devcontainer.json`, `config.env`, `dev` wrapper,
+1. seeds the project-owned files (`devcontainer.json`, `config.env`, `vibe` wrapper,
    `AGENTS.md`, `project/` hooks) rendered for the chosen preset, plus
    `.claude/settings.json` (statusline + sudo-deny) unless the project already
    has one,
@@ -56,13 +56,13 @@ git submodule set-url .devcontainer/harness https://github.com/chrisdruta/vibe-d
 
 ```bash
 cd ~/dev/my-project
-./.devcontainer/dev up        # builds the image, starts the container, bootstraps
-./.devcontainer/dev agent     # launches the default agent (Claude Code)
+./.devcontainer/vibe up        # builds the image, starts the container, bootstraps
+./.devcontainer/vibe agent     # launches the default agent (Claude Code)
 ```
 
 VS Code users can instead **Reopen in Container**; the same lifecycle hooks run.
 
-On first `dev agent`, Claude Code walks through its login. Logins persist in a
+On first `vibe agent`, Claude Code walks through its login. Logins persist in a
 named volume per project — see [agent-state.md](agent-state.md).
 
 ## Cloning a project that already uses the harness
@@ -73,7 +73,7 @@ git clone --recurse-submodules <project-url>
 git submodule update --init
 ```
 
-The seeded `.devcontainer/dev` wrapper prints exactly that hint if the submodule
+The seeded `.devcontainer/vibe` wrapper prints exactly that hint if the submodule
 is missing.
 
 ## Uninstall from a project

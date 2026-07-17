@@ -5,23 +5,23 @@ Project-owned configuration lives next to the harness submodule and is seeded by
 
 ## `config.env`
 
-Non-secret behavior toggles, sourced by the lifecycle scripts and `dev agent`:
+Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 
 | Variable                | Default                       | Meaning                                            |
 | ----------------------- | ----------------------------- | -------------------------------------------------- |
-| `DEV_AGENT_CMD`         | `claude`                      | What `dev agent` runs (may include arguments)      |
-| `DEV_AGENT_TMUX`        | `1` (seeded; unset = `0`)     | `1`: `dev agent` runs in a persistent tmux session — rerunning attaches, detaching (`Ctrl-b d`) keeps it alive |
-| `DEV_AGENT_TMUX_SESSION`| `agent`                       | tmux session name used by `dev agent`              |
+| `DEV_AGENT_CMD`         | `claude`                      | What `vibe agent` runs (may include arguments)      |
+| `DEV_AGENT_TMUX`        | `1` (seeded; unset = `0`)     | `1`: `vibe agent` runs in a persistent tmux session — rerunning attaches, detaching (`Ctrl-b d`) keeps it alive |
+| `DEV_AGENT_TMUX_SESSION`| `agent`                       | tmux session name used by `vibe agent`              |
 | `DEV_BOOTSTRAP_STRICT`  | `1`                           | `1`: bootstrap steps fail loudly; `0`: warn and continue |
 | `DEV_AUTO_INSTALL`      | `1`                           | Enable lockfile-detected dependency installation   |
 | `DEV_AUTO_GIT_HOOKS`    | `1`                           | Wire `.githooks/` into `core.hooksPath` (see [security.md](security.md)) |
 | `DEV_AUTO_GIT_LFS`      | `1`                           | Repo-local `git lfs install` when LFS attributes exist |
-| `DEV_ENV_FILE`          | `.env`                        | File loaded by `dev agent` / `dev run` / `env-run.sh` |
-| `DEV_REQUIRED_COMMANDS` | `git gh jq rg uv claude` (+preset) | Commands `dev doctor` requires                |
+| `DEV_ENV_FILE`          | `.env`                        | File loaded by `vibe agent` / `vibe run` / `env-run.sh` |
+| `DEV_REQUIRED_COMMANDS` | `git gh jq rg uv claude` (+preset) | Commands `vibe doctor` requires                |
 
 ## Bootstrap behavior
 
-`post-create.sh` (also rerunnable as `dev bootstrap`) detects manifests in the
+`post-create.sh` (also rerunnable as `vibe bootstrap`) detects manifests in the
 repository root, in this order:
 
 - `pyproject.toml` + `uv.lock` → `uv sync --frozen`
@@ -95,9 +95,9 @@ import it from the project's root `CLAUDE.md`/`AGENTS.md` with a
 Nothing auto-sources `.env`; `.bashrc` is never modified. Load explicitly:
 
 ```bash
-./.devcontainer/dev agent            # loads DEV_ENV_FILE, then runs DEV_AGENT_CMD
-./.devcontainer/dev agent --cold     # same, but without repo instruction files (see usage.md)
-./.devcontainer/dev run codex        # same, for any command
+./.devcontainer/vibe agent            # loads DEV_ENV_FILE, then runs DEV_AGENT_CMD
+./.devcontainer/vibe agent --cold     # same, but without repo instruction files (see usage.md)
+./.devcontainer/vibe run codex        # same, for any command
 ./.devcontainer/harness/scripts/env-run.sh some-command   # inside the container
 ```
 

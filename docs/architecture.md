@@ -23,18 +23,18 @@ the project.
 my-project/.devcontainer/
 ├── devcontainer.json   # PROJECT-owned: image args, mounts, runArgs, extensions
 ├── config.env          # PROJECT-owned: behavior toggles
-├── dev                 # PROJECT-owned: 3-line wrapper → harness/dev
+├── vibe                # PROJECT-owned: thin wrapper → harness/vibe
 ├── project/            # PROJECT-owned: lifecycle hooks
 └── harness/            # SHARED: this repo, pinned as a git submodule
     ├── Dockerfile      # image recipe (base + optional tool args)
-    ├── dev             # launcher (repo-agnostic)
+    ├── vibe            # launcher (repo-agnostic; `dev` kept as back-compat shim)
     ├── scripts/        # lifecycle: lib, post-create, post-start, doctor, env-run
     ├── scripts/host/   # WSL-host helpers (start-ollama.sh)
     ├── features/       # opt-in Dev Container Features (build-time apt installs)
     ├── config/         # container config baked by the Dockerfile (tmux.conf)
     └── templates/      # seeds for the project-owned files (install-time only)
 
-`Dockerfile`, `dev`, `scripts/`, `features/`, and `templates/` are effectively the
+`Dockerfile`, `vibe`, `scripts/`, `features/`, and `templates/` are effectively the
 harness's public interface: seeded consumer files reference them by path
 (`harness/Dockerfile`, `harness/scripts/post-create.sh`, …), so renaming or moving
 them breaks every consumer on its next submodule update. Anything else may be
@@ -74,7 +74,7 @@ placeholders, and preset-specific content), and exercises `--force` reinstall.
 Note: the install test clones **committed HEAD** — commit before verifying.
 
 For runtime changes, do a real end-to-end pass: install into a scratch repo,
-`dev up`, `dev doctor`, exercise the changed behavior, and `dev rebuild` to confirm
+`vibe up`, `vibe doctor`, exercise the changed behavior, and `vibe rebuild` to confirm
 state survives recreation.
 
 Ground rules (see also [AGENTS.md](../AGENTS.md)):

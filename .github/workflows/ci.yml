@@ -44,4 +44,4 @@ jobs:
             commit -q --allow-empty -m init
           ./install.sh --preset minimal --url "$PWD" "$target"
           cd "$target"
-          ./.devcontainer/dev build
+          ./.devcontainer/vibe build

@@ -55,8 +55,8 @@ checklist and a copy-paste prompt.
 
 ```bash
 cd ~/dev/my-project
-./.devcontainer/dev up
-./.devcontainer/dev agent
+./.devcontainer/vibe up
+./.devcontainer/vibe agent
 ```
 
 Or open the repository in VS Code and choose **Reopen in Container**.
@@ -65,13 +65,13 @@ Or open the repository in VS Code and choose **Reopen in Container**.
 
 | Command         | Does                                                     |
 | --------------- | -------------------------------------------------------- |
-| `dev up`        | Build/start the container                                 |
-| `dev agent`     | Run the default agent with explicit `.env` loading (`--cold`: no repo instruction files; `-a CMD`: pick the agent) |
-| `dev run CMD`   | Run any command with explicit `.env` loading              |
-| `dev shell`     | Open a Bash shell inside the container                    |
-| `dev clip`      | Save the host clipboard image for the container (image-paste workaround) |
-| `dev doctor`    | Check the environment (run this first when things break)  |
-| `dev rebuild`   | Recreate after editing `devcontainer.json`/Dockerfile     |
+| `vibe up`        | Build/start the container                                 |
+| `vibe agent`     | Run the default agent with explicit `.env` loading (`--cold`: no repo instruction files; `-a CMD`: pick the agent) |
+| `vibe run CMD`   | Run any command with explicit `.env` loading              |
+| `vibe shell`     | Open a Bash shell inside the container                    |
+| `vibe clip`      | Save the host clipboard image for the container (image-paste workaround) |
+| `vibe doctor`    | Check the environment (run this first when things break)  |
+| `vibe rebuild`   | Recreate after editing `devcontainer.json`/Dockerfile     |
 
 Full list and typical workflows: [docs/usage.md](docs/usage.md).
 
@@ -106,7 +106,7 @@ Branch-following convenience and caveats: [docs/updating.md](docs/updating.md).
 ## Dogfooding
 
 This repository consumes itself: it carries its own `.devcontainer/` with the
-harness as a self-submodule, so `./.devcontainer/dev up` and `dev agent` work
+harness as a self-submodule, so `./.devcontainer/vibe up` and `vibe agent` work
 here like in any consumer. The container runs the **pinned submodule copy** at
 `.devcontainer/harness`, not your working tree — to test a harness change
 through the harness itself, sync the copy forward:
@@ -115,7 +115,7 @@ through the harness itself, sync the copy forward:
 git commit ...                                       # your change, in the outer repo
 git -C .devcontainer/harness fetch "$PWD" my-branch
 git -C .devcontainer/harness checkout FETCH_HEAD
-./.devcontainer/dev rebuild   # only if Dockerfile/devcontainer.json changed
+./.devcontainer/vibe rebuild   # only if Dockerfile/devcontainer.json changed
 ```
 
 Never edit files under `.devcontainer/harness/` — that is the nested clone;

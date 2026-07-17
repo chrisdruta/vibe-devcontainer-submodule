@@ -25,7 +25,7 @@ the checklist, and a prompt you can paste to have an agent do it.
    `project/post-start.sh` (every start; keep idempotent). Dependency installs
    are already automatic for detected lockfiles.
 5. **`config.env`** — set `DEV_REQUIRED_COMMANDS` to what the project actually
-   needs (`dev doctor` enforces it); adjust `DEV_AGENT_CMD` / `DEV_AGENT_TMUX`.
+   needs (`vibe doctor` enforces it); adjust `DEV_AGENT_CMD` / `DEV_AGENT_TMUX`.
 6. **Secrets** — ensure `.env` is gitignored; move API keys there.
 7. **Agent rules** — add `@.devcontainer/AGENTS.md` to the project's root
    `CLAUDE.md`/`AGENTS.md` so agents inherit the container rules. If the
@@ -36,8 +36,8 @@ the checklist, and a prompt you can paste to have an agent do it.
 8. **Recipes** — apply what fits: [browser-automation.md](browser-automation.md)
    (headless Chromium for web projects), [roblox.md](roblox.md),
    [local-models.md](local-models.md).
-9. **Verify** — `dev up`, `dev doctor`, exercise a build/test command via
-   `dev exec`, then `dev rebuild` to confirm everything survives recreation.
+9. **Verify** — `vibe up`, `vibe doctor`, exercise a build/test command via
+   `vibe exec`, then `vibe rebuild` to confirm everything survives recreation.
 10. **Commit** — the seeded files plus the submodule pin.
 
 ## Agent prompt
@@ -69,8 +69,8 @@ Onboard this repository onto the vibe-devcontainer-submodule harness at
    settings.
 7. Read .devcontainer/harness/docs/ and apply relevant recipes
    (browser-automation for web projects, roblox, local-models).
-8. Verify: ./.devcontainer/dev up, then dev doctor, then run the project's
-   build/test via dev exec, then dev rebuild. Fix what fails; constraints are
+8. Verify: ./.devcontainer/vibe up, then vibe doctor, then run the project's
+   build/test via vibe exec, then vibe rebuild. Fix what fails; constraints are
    explained in .devcontainer/AGENTS.md (no sudo — OS packages need build args
    or features plus a rebuild).
 9. Stage everything and report: preset chosen, args flipped, what was migrated

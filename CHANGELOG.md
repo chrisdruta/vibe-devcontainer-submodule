@@ -5,6 +5,23 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **The launcher is now `vibe`** (was `dev`): seeded as `.devcontainer/vibe`,
+  real script at `harness/vibe`. `harness/dev` remains as a back-compat shim so
+  existing consumer wrappers keep working across a pin bump, and the seeded
+  wrapper tries `vibe` then `dev` so it also works against older pins.
+  Entries below predate the rename; read their `dev` commands as `vibe`.
+- **Global launcher**: `vibe` resolves the target project by walking up from
+  the current directory to the nearest `.devcontainer/devcontainer.json`
+  (falling back to the project the script lives in) and survives being
+  symlinked (`readlink -f`) — one `~/.local/bin/vibe` symlink now serves every
+  harness project from any subdirectory. The previously documented host-wide
+  symlink was broken.
+- **Auto-up**: container commands (`agent`, `shell`, `run`, `exec`, `doctor`,
+  `bootstrap`, `clip`) start the container when it isn't running (detected via
+  the devcontainer CLI's `devcontainer.local_folder` label, or an exec probe
+  when no docker client is present). Start-up progress goes to stderr so
+  `vibe run` stdout stays pipeable; a cold `vibe agent` is the whole morning
+  routine.
 - **Docs: [positioning.md](docs/positioning.md)** — the layer this harness
   occupies vs. agent loops and orchestrator UIs, its principles and non-goals,
   and the recorded decision to keep auth agent-native and per-project (no
