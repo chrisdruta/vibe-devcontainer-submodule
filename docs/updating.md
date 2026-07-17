@@ -50,3 +50,21 @@ done
   anything under `templates/` you want re-rendered (template changes only affect
   newly installed projects; your project-owned files are never rewritten —
   re-run `install.sh --force` if you want a fresh seed, your old files are backed up).
+
+## Crossing v0.4.0 from an older install
+
+Projects installed before v0.4.0 keep working unchanged — the wrapper is still
+`.devcontainer/dev` there, and it runs the new launcher through the
+`harness/dev` back-compat shim. Two seeded files are worth reconciling by hand
+(or with `install.sh --force`) to pick up the v0.4.0 features:
+
+- `devcontainer.json`: add `"GH_CONFIG_DIR": "/home/vscode/.agents/gh"` to
+  `containerEnv` — without it, `gh auth login` lands in the container
+  filesystem and dies on every rebuild instead of persisting in the state
+  volume ([configuration.md → GitHub access](configuration.md)).
+- `.claude/settings.json`: merge the `Read(./.env)` / `Read(./.env.*)` denies
+  (and, pre-v0.3.0, the statusline) from `templates/claude-settings.json`.
+
+Optionally rename the wrapper to match the docs: `git mv .devcontainer/dev
+.devcontainer/vibe`, then copy the current `templates/vibe` over it (the new
+wrapper tries both launcher names, so it also works if the pin ever moves back).

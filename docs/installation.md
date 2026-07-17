@@ -65,6 +65,11 @@ VS Code users can instead **Reopen in Container**; the same lifecycle hooks run.
 On first `vibe agent`, Claude Code walks through its login. Logins persist in a
 named volume per project — see [agent-state.md](agent-state.md).
 
+For `git push` / `gh` from inside the container, mint a per-project
+fine-grained PAT and `gh auth login` once — the installer prints the
+permission set in its next-steps output, and
+[configuration.md → GitHub access](configuration.md) has the full reference.
+
 ## Cloning a project that already uses the harness
 
 ```bash

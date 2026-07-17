@@ -213,3 +213,12 @@ echo "  2. Add '@.devcontainer/AGENTS.md' to the project's CLAUDE.md or AGENTS.m
 echo "     so agents inherit the container rules (see docs/onboarding.md)"
 echo "  3. Run ./.devcontainer/vibe up"
 echo "  4. Run ./.devcontainer/vibe agent"
+echo
+echo "Optional — GitHub access from inside the container (git push, gh pr):"
+echo "  Mint a fine-grained PAT: https://github.com/settings/personal-access-tokens/new"
+echo "    Repository access: Only select repositories -> this repo; set an expiration"
+echo "    Contents: Read/write      Pull requests:   Read/write"
+echo "    Actions:  Read-only       Commit statuses: Read-only"
+echo "    Workflows: Read/write only if agents edit .github/workflows/"
+echo "  Then in the container: gh auth login  (github.com -> HTTPS -> paste token)"
+echo "  Login and git wiring persist per project; details: docs/configuration.md"
