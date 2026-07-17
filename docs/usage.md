@@ -133,6 +133,12 @@ Gitignore the directory if you use this mode routinely.
 - **Changed `devcontainer.json` or the Dockerfile and nothing happened?**
   `vibe up` reuses an existing container; run `vibe rebuild`.
 - **`Harness submodule is missing`** — run `git submodule update --init`.
+- **Build warning `InvalidDefaultArgInFrom: Default value for ARG $BASE_IMAGE
+  ... (line 4)`** — harmless, and not from the harness Dockerfile (whose
+  `BASE_IMAGE` has a valid default). With `updateRemoteUserUID` the
+  devcontainer CLI runs a second UID-sync build using its own bundled
+  `updateUID.Dockerfile`, which declares `ARG BASE_IMAGE` without a default;
+  Docker ≥ 4.33 lints that file. Fix belongs upstream in devcontainers/cli.
 - **Bootstrap fails loudly** — that is `DEV_BOOTSTRAP_STRICT=1` doing its job:
   a detected manifest's tool is missing. Install the tool via build args or set
   `DEV_BOOTSTRAP_STRICT=0` to degrade to warnings
