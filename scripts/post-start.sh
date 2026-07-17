@@ -22,8 +22,17 @@ chmod +x "$DEVCONTAINER_DIR/vibe" "$DEVCONTAINER_DIR/dev" \
 # this reruns on every start: it restores them after a rebuild.
 if command -v gh >/dev/null 2>&1 && gh auth token >/dev/null 2>&1; then
   gh auth setup-git 2>/dev/null || warn "gh is logged in but credential-helper setup failed"
-  git config --global url."https://github.com/".insteadOf "git@github.com:" \
-    || warn "could not set the GitHub SSH->HTTPS rewrite"
+  # Rewrite both GitHub SSH remote forms — scp-style (git@github.com:owner/repo)
+  # and ssh:// (ssh://git@github.com/owner/repo) — to HTTPS. insteadOf is
+  # multi-valued, so clear then re-add both: idempotent across every start,
+  # where a plain set would clobber and --add would accumulate duplicates.
+  if command -v git >/dev/null 2>&1; then
+    git config --global --unset-all url."https://github.com/".insteadOf 2>/dev/null || true
+    if ! { git config --global --add url."https://github.com/".insteadOf "git@github.com:" \
+        && git config --global --add url."https://github.com/".insteadOf "ssh://git@github.com/"; }; then
+      warn "could not set the GitHub SSH->HTTPS rewrite"
+    fi
+  fi
 fi
 
 # pipefail makes the doctor exit status win over tee's.

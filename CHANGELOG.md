@@ -5,6 +5,24 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Security fixes from a code review** (host-boundary hardening):
+  - `clip-image.sh` no longer interpolates the destination path into the
+    PowerShell or AppleScript it runs — a path containing a quote could break
+    out into **host** command execution. The path now travels as an
+    environment variable (PowerShell) / run-handler argument (AppleScript).
+  - `clip-image.sh` confines workspace-mode writes: the destination is
+    resolved with `pwd -P` and rejected if it escapes the real repo root
+    (defeating a repo-planted symlink like `.captures -> ../../.ssh`), and an
+    existing symlink at the target file is refused.
+  - `vibe clip DIR` (workspace mode) no longer auto-starts the container — it
+    writes straight to the bind mount, so nothing needs to be running.
+  - The agent-command split (`DEV_AGENT_CMD`, `-a`) runs under `set -f`, so a
+    value containing `*` can no longer glob-expand repo filenames into agent
+    arguments.
+  - Launcher symlink resolution replaces GNU-only `readlink -f` with a portable
+    loop (restores the stock-macOS bash-3.2 host invariant).
+  - post-start's GitHub rewrite now also covers `ssh://git@github.com/` remotes,
+    set idempotently (unset-all then add) so restarts don't accumulate values.
 - **Agent-driven update prompt** in [updating.md](docs/updating.md): paste-ready
   prompt that moves the pin, reads the changelog between versions, reconciles
   the project-owned seeded files against the new templates (project values win

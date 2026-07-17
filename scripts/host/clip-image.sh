@@ -44,7 +44,25 @@ file_name="clip-$(date +%Y%m%d-%H%M%S).png"
 if [ -n "$dest_dir" ]; then
   # Workspace mode: the repo is bind-mounted, so writing on the host is enough.
   mkdir -p "$repo_root/$dest_dir"
-  host_png="$repo_root/$dest_dir/$file_name"
+  # The `..` check above is lexical; a repo-controlled symlink (e.g.
+  # .captures -> ../../.ssh) would still let mkdir/write escape. Resolve the
+  # real directory with `pwd -P` (POSIX, portable) and confirm it stays under
+  # the real repo root; then refuse an existing symlink at the target file so a
+  # pre-planted link can't redirect the write.
+  repo_root_real="$(cd "$repo_root" && pwd -P)"
+  dest_real="$(cd "$repo_root/$dest_dir" && pwd -P)"
+  case "$dest_real" in
+    "$repo_root_real" | "$repo_root_real"/*) : ;;
+    *)
+      echo "Destination resolves outside the workspace (symlink?): $dest_dir" >&2
+      exit 2
+      ;;
+  esac
+  host_png="$dest_real/$file_name"
+  if [ -L "$host_png" ]; then
+    echo "Refusing to write through an existing symlink: $dest_dir/$file_name" >&2
+    exit 2
+  fi
   container_path="/workspaces/$(basename "$repo_root")/$dest_dir/$file_name"
 else
   container_path="/tmp/$file_name"
@@ -55,24 +73,36 @@ fi
 
 if command -v powershell.exe >/dev/null 2>&1; then
   # WSL: PowerShell needs a WINDOWS path; wslpath maps the WSL-side temp file.
-  win_path="$(wslpath -w "$host_png")"
-  result="$(powershell.exe -NoProfile -Command "
+  # Pass the destination through the environment, never interpolated into the
+  # script text: a path containing a single quote would otherwise break out of
+  # the PowerShell string and run as host-side code. WSL forwards env vars to
+  # Windows processes, so $env:CLIP_WIN_PATH reads it back as inert data.
+  CLIP_WIN_PATH="$(wslpath -w "$host_png")"
+  export CLIP_WIN_PATH
+  # shellcheck disable=SC2016  # single quotes are deliberate: $env:... is PowerShell, not bash
+  result="$(powershell.exe -NoProfile -Command '
     Add-Type -AssemblyName System.Windows.Forms
-    \$img = [System.Windows.Forms.Clipboard]::GetImage()
-    if (\$img -eq \$null) { Write-Output 'NOIMAGE' } else { \$img.Save('$win_path', [System.Drawing.Imaging.ImageFormat]::Png); Write-Output 'SAVED' }
-  " | tr -d '\r')"
+    $img = [System.Windows.Forms.Clipboard]::GetImage()
+    if ($img -eq $null) { Write-Output "NOIMAGE" } else { $img.Save($env:CLIP_WIN_PATH, [System.Drawing.Imaging.ImageFormat]::Png); Write-Output "SAVED" }
+  ' | tr -d '\r')"
   if [ "$result" != "SAVED" ]; then
     echo "No image on the Windows clipboard." >&2
     exit 1
   fi
 elif command -v osascript >/dev/null 2>&1; then
   # macOS: stock AppleScript; errors out before opening the file when the
-  # clipboard has no PNG-convertible image.
-  if ! osascript >/dev/null 2>&1 \
-    -e 'set png to the clipboard as «class PNGf»' \
-    -e "set f to open for access POSIX file \"$host_png\" with write permission" \
-    -e 'write png to f' \
-    -e 'close access f'; then
+  # clipboard has no PNG-convertible image. The path is passed as a run-handler
+  # argument (never interpolated into the script), so a path containing a double
+  # quote can't break out of the AppleScript string into host code.
+  if ! osascript - "$host_png" >/dev/null 2>&1 <<'APPLESCRIPT'; then
+on run argv
+  set outPath to item 1 of argv
+  set png to the clipboard as «class PNGf»
+  set f to open for access POSIX file outPath with write permission
+  write png to f
+  close access f
+end run
+APPLESCRIPT
     echo "No image on the macOS clipboard." >&2
     exit 1
   fi

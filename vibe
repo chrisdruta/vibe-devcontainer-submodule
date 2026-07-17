@@ -7,7 +7,16 @@ set -euo pipefail
 # the nearest ancestor of $PWD with a .devcontainer/devcontainer.json; when
 # $PWD is outside any project, it falls back to the project this script lives
 # in (two levels up, after resolving symlinks).
-self_path="$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")"
+# Resolve symlinks with a loop rather than `readlink -f` (GNU-only; stock macOS
+# readlink lacks -f). Follows each link hop; the trailing `cd`+`pwd` canonicalizes.
+self_path="${BASH_SOURCE[0]}"
+while [ -L "$self_path" ]; do
+  link_target="$(readlink "$self_path")"
+  case "$link_target" in
+    /*) self_path="$link_target" ;;
+    *)  self_path="$(dirname -- "$self_path")/$link_target" ;;
+  esac
+done
 self_dir="$(cd -- "$(dirname -- "$self_path")" && pwd)"
 
 repo_root=""
@@ -115,6 +124,7 @@ case "$command_name" in
     # shellcheck disable=SC2016  # expansion happens inside the container shell
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
       bash -lc 'source .devcontainer/config.env
+        set -f  # split DEV_AGENT_CMD/-a on spaces without expanding globs (e.g. *)
         cold="$1"; agent_override="$2"; shift 2
         session="${DEV_AGENT_TMUX_SESSION:-agent}"
         if [ -n "$agent_override" ]; then
@@ -162,9 +172,11 @@ case "$command_name" in
     exec "${cli[@]}" exec --workspace-folder "$repo_root" "$@"
     ;;
   clip)
-    ensure_up
     # Host-side: grabs the OS clipboard image; container /tmp by default, or a
-    # workspace-relative directory when given (vibe clip .captures).
+    # workspace-relative directory when given (vibe clip .captures). Workspace
+    # mode writes straight to the bind mount, so only the /tmp streaming path
+    # (no DIR) needs a running container.
+    [ -n "${1:-}" ] || ensure_up
     exec bash "$self_dir/scripts/host/clip-image.sh" "$repo_root" "${1:-}" "${cli[@]}"
     ;;
   help|-h|--help)
