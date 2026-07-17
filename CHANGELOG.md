@@ -3,7 +3,7 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
-## Unreleased
+## v0.5.1 — 2026-07-17
 
 - **Security fixes from a code review** (host-boundary hardening):
   - `clip-image.sh` no longer interpolates the destination path into the
