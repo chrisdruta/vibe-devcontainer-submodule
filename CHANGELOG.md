@@ -11,7 +11,8 @@ Consumers pin a commit; tags mark intentional upgrade points
   container-local `~/.gitconfig` after every rebuild, so an SSH-cloned repo
   shared with the host stays pushable in-container. The `gh auth login` is the
   opt-in; never logging in leaves git untouched. `vibe doctor` reports the
-  state (logged in + wired / not wired / not logged in). Also: post-start's
+  state (logged in + wired / not wired / not logged in). configuration.md
+  gains a fine-grained-PAT permission quick reference. Also: post-start's
   exec-bit self-heal now covers the renamed `vibe` wrapper.
 
 ## v0.4.0 — 2026-07-17

@@ -106,9 +106,10 @@ project `.env`. For unattended runs, use minimum-permission tokens or none.
 
 ### GitHub access
 
-Preferred: a **per-project fine-grained PAT** — single-repository access,
-Contents read/write (plus Pull Requests for `gh pr`), an expiry, and no
-`workflow` or admin scopes — pasted into `gh auth login` inside the container.
+Preferred: a **per-project fine-grained PAT** — single-repository access, an
+expiry, and only the permissions below — pasted into `gh auth login` inside
+the container (choose HTTPS; SSH never uses the PAT and the container has no
+SSH keys).
 `GH_CONFIG_DIR` points into the state volume, so the login persists across
 rebuilds and stays compartmentalized per project, like the agent logins.
 
@@ -119,6 +120,31 @@ git's credential helper and rewrites `git@github.com:` remotes to HTTPS
 shared with the host would otherwise be push-dead in here; host git is
 untouched). Never logged in → nothing is wired. `vibe doctor` reports the
 state either way.
+
+#### Fine-grained PAT quick reference
+
+Create at GitHub → Settings → Developer settings → Fine-grained tokens
+(<https://github.com/settings/personal-access-tokens/new>). Repository
+access: **Only select repositories** → the one project repo. Set an
+expiration. Repository permissions:
+
+| Permission      | Access         | Enables                                             |
+| --------------- | -------------- | --------------------------------------------------- |
+| Contents        | Read and write | clone, pull, push, branches, merges, releases       |
+| Pull requests   | Read and write | `gh pr create/view/comment/merge`                   |
+| Actions         | Read-only      | `gh run list/view/watch` — following CI runs        |
+| Commit statuses | Read-only      | `gh pr checks`, commit status on PRs                |
+| Workflows       | Read and write | pushes that touch `.github/workflows/` (see below)  |
+| Metadata        | Read-only      | added automatically (required)                      |
+
+**Workflows is the conscious trade in this set.** Without it, GitHub rejects
+any push containing changes under `.github/workflows/` — annoying in repos
+where CI files are part of normal development. With it, whatever runs in the
+container can modify CI, which is a privilege-escalation path (a malicious
+change to a workflow file executes with the repository's Actions
+credentials). Grant it for interactive work on repos whose CI you edit; leave
+it off for unattended runs and low-trust projects, where a rejected
+workflow-file push is the guardrail working.
 
 Alternative: `GH_TOKEN` is forwarded from the host via `remoteEnv` (never baked
 into the image). Note the trade: a host-level token is one token for **every**
