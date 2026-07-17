@@ -101,9 +101,22 @@ Nothing auto-sources `.env`; `.bashrc` is never modified. Load explicitly:
 ./.devcontainer/harness/scripts/env-run.sh some-command   # inside the container
 ```
 
-`GH_TOKEN` is forwarded from the host via `remoteEnv` (never baked into the image).
 Agent API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `XAI_API_KEY`) belong in the
 project `.env`. For unattended runs, use minimum-permission tokens or none.
+
+### GitHub access
+
+Preferred: a **per-project fine-grained PAT** — single-repository access,
+Contents read/write (plus Pull Requests for `gh pr`), an expiry, and no
+`workflow` or admin scopes — pasted into `gh auth login` inside the container.
+`GH_CONFIG_DIR` points into the state volume, so the login persists across
+rebuilds and stays compartmentalized per project, like the agent logins.
+`gh` also registers itself as git's credential helper, so `git push` works.
+
+Alternative: `GH_TOKEN` is forwarded from the host via `remoteEnv` (never baked
+into the image). Note the trade: a host-level token is one token for **every**
+project's container, and while it is set `gh auth login` refuses to run —
+unset it on the host to use per-project logins.
 
 ## Ports and host networking
 

@@ -24,7 +24,7 @@ The installer:
 
 1. seeds the project-owned files (`devcontainer.json`, `config.env`, `vibe` wrapper,
    `AGENTS.md`, `project/` hooks) rendered for the chosen preset, plus
-   `.claude/settings.json` (statusline + sudo-deny) unless the project already
+   `.claude/settings.json` (statusline + sudo/`.env`-read deny) unless the project already
    has one,
 2. runs `git submodule add` for `.devcontainer/harness`,
 3. stages everything — nothing is committed; review with `git status` and commit.

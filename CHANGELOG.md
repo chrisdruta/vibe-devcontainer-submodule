@@ -3,8 +3,20 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
-## Unreleased
+## v0.4.0 — 2026-07-17
 
+- **Per-project `gh` logins**: `GH_CONFIG_DIR` now points into the agent-state
+  volume, so `gh auth login` (recommended: paste a per-project fine-grained
+  PAT — single repo, Contents read/write, no `workflow` scope) persists across
+  rebuilds and stays compartmentalized per project. Host-level `GH_TOKEN`
+  forwarding is unchanged but documented as the one-token-everywhere trade;
+  `gh auth login` refuses while it is set. See configuration.md → GitHub access.
+- **Seeded Claude settings deny `.env` reads**: `Read(./.env)` /
+  `Read(./.env.*)` join the sudo/su denies in the seeded
+  `.claude/settings.json` — an agent-level guardrail against prompt-injected
+  secret reads, not a boundary (see security.md, which also documents the
+  `/dev/null`-over-secret-file mount recipe for project secrets agents never
+  need). Existing projects keep their own settings file; merge manually.
 - **The launcher is now `vibe`** (was `dev`): seeded as `.devcontainer/vibe`,
   real script at `harness/vibe`. `harness/dev` remains as a back-compat shim so
   existing consumer wrappers keep working across a pin bump, and the seeded

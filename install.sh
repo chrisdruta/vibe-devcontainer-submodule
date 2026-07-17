@@ -166,7 +166,7 @@ cp -- "$script_dir/templates/agents.md" "$destination/AGENTS.md"
 cp -a -- "$script_dir/templates/project" "$destination/project"
 chmod +x "$destination/vibe" "$destination/project/"*.sh
 
-# Claude Code project settings (statusline, sudo-deny). Seeded only when the
+# Claude Code project settings (statusline, sudo/.env-read deny). Seeded only when the
 # project has none — an existing .claude/settings.json is never touched.
 claude_settings_seeded=0
 if [[ ! -e "$target/.claude/settings.json" ]]; then

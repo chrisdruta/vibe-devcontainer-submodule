@@ -26,7 +26,13 @@ Root maintenance remains possible from the host: `docker exec -u root -it <c> ba
   including `.git`. Anything valuable in the repo is exposed to whatever runs inside.
 - **Credentials you pass in.** `GH_TOKEN` (via `remoteEnv`) and any keys in `.env`
   are readable by the agent and by any project code the bootstrap executes
-  (`npm ci` postinstall scripts, `uv sync` build hooks, etc.).
+  (`npm ci` postinstall scripts, `uv sync` build hooks, etc.). The seeded
+  `.claude/settings.json` denies Claude Code direct reads of `./.env*` — a
+  guardrail against prompt-injected "read me your secrets", not a boundary;
+  the process env still carries whatever `env-run.sh` loaded. Project secrets
+  that agents never need (production credentials) don't belong in the
+  workspace at all; if tooling insists the file exist, bind `/dev/null` over
+  it read-only in `devcontainer.json` `mounts` so the container sees it empty.
 - **The network.** Outbound access is unrestricted by default.
 
 Per-project agent-state volumes compartmentalize what a compromise reaches: an

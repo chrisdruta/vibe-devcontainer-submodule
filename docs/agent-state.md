@@ -8,6 +8,7 @@ Each project gets one named Docker volume, mounted at `~/.agents` in the contain
 agent-state-<workspace-folder-basename>
 ├── claude/   # CLAUDE_CONFIG_DIR
 ├── codex/    # CODEX_HOME
+├── gh/       # GH_CONFIG_DIR — `gh auth login` persists per project
 └── grok/     # ~/.grok is a symlink here (Grok has no config-dir env override)
 ```
 
