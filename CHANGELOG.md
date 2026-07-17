@@ -23,6 +23,9 @@ Consumers pin a commit; tags mark intentional upgrade points
     loop (restores the stock-macOS bash-3.2 host invariant).
   - post-start's GitHub rewrite now also covers `ssh://git@github.com/` remotes,
     set idempotently (unset-all then add) so restarts don't accumulate values.
+  - The `npx @devcontainers/cli` fallback is version-pinned (`@0.87.0`) instead
+    of resolving mutable `latest` on the host; override per run with
+    `DEVCONTAINER_CLI_SPEC`.
 - **Agent-driven update prompt** in [updating.md](docs/updating.md): paste-ready
   prompt that moves the pin, reads the changelog between versions, reconciles
   the project-owned seeded files against the new templates (project values win

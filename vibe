@@ -41,10 +41,15 @@ if [[ -z "$repo_root" ]]; then
   exit 1
 fi
 
+# Pin the npx fallback: `@devcontainers/cli` (unversioned) resolves the mutable
+# latest and runs it as the host user, so a bad release would execute with
+# access to the host home, SSH keys, and Docker. Prefer a locally installed CLI;
+# bump this pin deliberately. Override with DEVCONTAINER_CLI_SPEC if you must.
+DEVCONTAINER_CLI_SPEC="${DEVCONTAINER_CLI_SPEC:-@devcontainers/cli@0.87.0}"
 if command -v devcontainer >/dev/null 2>&1; then
   cli=(devcontainer)
 elif command -v npx >/dev/null 2>&1; then
-  cli=(npx -y @devcontainers/cli)
+  cli=(npx -y "$DEVCONTAINER_CLI_SPEC")
 else
   echo "Install @devcontainers/cli or Node/npx on the WSL host." >&2
   echo "Example: npm install -g @devcontainers/cli" >&2

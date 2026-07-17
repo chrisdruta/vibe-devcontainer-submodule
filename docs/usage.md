@@ -20,8 +20,11 @@ All commands run via the seeded wrapper — or as plain `vibe` with the
 | `bootstrap` | Rerun create-time dependency setup (idempotent)                        |
 | `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 
-The launcher uses a locally installed `devcontainer` CLI, falling back to
-`npx -y @devcontainers/cli`.
+The launcher uses a locally installed `devcontainer` CLI, falling back to a
+**version-pinned** `npx -y @devcontainers/cli@<pinned>` (unpinned `npx` would
+run whatever `latest` resolves to as the host user). Override the pin for one
+run with `DEVCONTAINER_CLI_SPEC=@devcontainers/cli@X.Y.Z vibe ...`, or just
+install the CLI globally to skip the fallback entirely.
 
 ## Global install
 
