@@ -5,6 +5,13 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **New: auto image preview in Claude Code sessions** — hooks in
+  `templates/claude-settings.json` (`UserPromptSubmit` + `PostToolUse: Read`
+  → `scripts/preview-image-hook.sh`) pop a self-closing tmux split whenever
+  an image path appears in your prompt or the agent reads an image file
+  (focused only for the instant the sixel renders, then focus returns). Tune the duration with `VIBE_PREVIEW_SECONDS` in `config.env`.
+  Existing projects adopt the hooks by merging the template block at their
+  next pin update.
 - **New: `vibe show [PATH]`** — sixel image preview in the terminal, the
   companion to `vibe clip`: with no argument it renders the newest
   `/tmp/clip-*.png` so you can see what an agent is about to look at (agent

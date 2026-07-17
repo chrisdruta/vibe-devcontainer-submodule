@@ -145,6 +145,23 @@ outer terminal must render sixel itself — Windows Terminal ≥ 1.22 qualifies.
 Outside tmux, `chafa` probes the terminal and falls back to unicode blocks
 where sixel is unavailable.
 
+Claude Code sessions go one better: hooks in the seeded `.claude/settings.json`
+(from `templates/claude-settings.json`) auto-open the preview split — when you
+submit a prompt containing an image path, and whenever the agent `Read`s an
+image file, so you see what it sees. The split takes focus only for the
+instant the image renders (sixel passthrough draws at the client cursor, so an
+unfocused pane would paint in the wrong place), hands it straight back, and is
+vertical (width changes trigger a known Claude-TUI rewrap stall). It closes
+itself after `VIBE_PREVIEW_SECONDS` (default 15; set it in `config.env`).
+Repeats of the same image within 30s are debounced per window.
+
+Known blind spot: when Claude Code converts a pasted path into an
+`[Image #N]` *attachment*, the path never reaches the hook (the prompt text
+only contains the placeholder, and the model gets the pixels directly, so no
+`Read` fires either). No auto-preview pops in that case — use `prefix + i`. Existing
+projects adopt the hooks by merging the template block during a
+[pin update](updating.md).
+
 ## Troubleshooting
 
 - **Start with `vibe doctor`.** It verifies non-root execution, workspace
