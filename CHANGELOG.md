@@ -3,6 +3,18 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## v0.5.2 — 2026-07-17
+
+- **Fix: `vibe clip` broken on WSL** (v0.5.1 regression) — WSL only shares
+  environment variables listed in `WSLENV` with Windows processes, so
+  `CLIP_WIN_PATH` (introduced by v0.5.1's injection hardening) was `$null`
+  inside `powershell.exe` and the clipboard save crashed — then falsely
+  reported success, cascading into a missing-file error. The variable is now
+  forwarded via `WSLENV`, the PowerShell step only reports `SAVED` after an
+  actual save (real errors are surfaced instead of "No image on the
+  clipboard"), and the script verifies the file exists before streaming it
+  into the container.
+
 ## v0.5.1 — 2026-07-17
 
 - **Security fixes from a code review** (host-boundary hardening):
