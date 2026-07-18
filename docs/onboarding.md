@@ -19,7 +19,11 @@ the checklist, and a prompt you can paste to have an agent do it.
    after `--force`): carry over extensions into `customizations.vscode`,
    `containerEnv`, extra mounts, and features. Do **not** carry over sudo,
    docker-socket mounts, or published ports without a reason — the hardening
-   is the point ([security.md](security.md)).
+   is the point ([security.md](security.md)). One reason that qualifies:
+   loopback-only `appPort` binds (`127.0.0.1:PORT:PORT`) for host tooling
+   that must reach the container without a forwarding client attached
+   (Studio → Rojo being the canonical case; `forwardPorts` is client-side
+   and does nothing under bare `devcontainer exec`).
 4. **Lifecycle hooks** — translate the repo's README/setup steps into
    `project/post-create.sh` (one-time: codegen, migrations, MCP setup) and
    `project/post-start.sh` (every start; keep idempotent). Dependency installs
@@ -64,7 +68,11 @@ with the project.
 3. Reconcile .devcontainer/devcontainer.json build args with the toolchain
    (INSTALL_NODE, INSTALL_BUN, ...) and migrate anything still valuable from
    the backup dir: extensions, containerEnv, mounts, features. Never reintroduce
-   sudo, docker-socket mounts, or published ports.
+   sudo or docker-socket mounts. Published ports: keep loopback-only appPort
+   binds ("127.0.0.1:PORT:PORT") that host tooling needs to reach the container
+   without VS Code attached (e.g. Roblox Studio -> Rojo 34872) — forwardPorts
+   only works with a forwarding client connected. Never publish bare ports
+   (they bind 0.0.0.0); see docs/roblox.md.
 4. Fill .devcontainer/project/post-create.sh and post-start.sh from the
    project's documented setup steps (dependency installs for detected
    lockfiles are automatic — don't duplicate them). Keep hooks idempotent.

@@ -14,7 +14,10 @@ does not make running untrusted code safe.
   effectively root on the host; `vibe doctor` checks for it)
 - No SSH keys, no host home directory — only the workspace and the agent-state
   volume are mounted
-- No published ports
+- No published ports (documented exception: loopback-only `appPort` binds —
+  `127.0.0.1:PORT:PORT` — for host tooling that must reach the container
+  without a forwarding client attached, e.g. Roblox Studio → Rojo; see
+  [roblox.md](roblox.md))
 - `.env` is never auto-sourced; secrets reach a process only through explicit
   `vibe agent` / `vibe run` / `env-run.sh` invocation
 

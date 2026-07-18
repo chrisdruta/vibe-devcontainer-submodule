@@ -35,15 +35,31 @@ The harness never starts services. Start Rojo from the project hook or a tmux pa
 pgrep -f "rojo serve" >/dev/null || (rojo serve &>/tmp/rojo.log &)
 ```
 
-To reach Rojo from Roblox Studio on the Windows host, forward the port in the
-project's `devcontainer.json`:
+To reach Rojo from Roblox Studio on the Windows host, pick by how you attach:
 
-```jsonc
-"forwardPorts": [34872],
-"portsAttributes": { "34872": { "label": "Rojo" } }
-```
+- **Terminal-first (`vibe agent` / `devcontainer exec` — no VS Code attached):
+  publish the port to loopback with `appPort`.** `forwardPorts` is implemented
+  by the attached client; the devcontainer CLI forwards nothing, so with
+  `forwardPorts` alone Studio cannot reach Rojo and sync silently breaks.
 
-Forwarded ports bind to loopback on the host.
+  ```jsonc
+  "appPort": ["127.0.0.1:34872:34872"]
+  ```
+
+  The loopback bind is the point: this is the sanctioned exception to the
+  no-published-ports rule, because `127.0.0.1:` keeps the port off the
+  network — only the local machine (and, via Docker Desktop's proxy, the
+  Windows host) can reach it. Never publish bare (`"appPort": [34872]`
+  binds `0.0.0.0`). `appPort` applies at container creation — rebuild after
+  adding it.
+
+- **VS Code-attached workflows** can use `forwardPorts` instead (active only
+  while the client is connected):
+
+  ```jsonc
+  "forwardPorts": [34872],
+  "portsAttributes": { "34872": { "label": "Rojo" } }
+  ```
 
 ## Studio bridge / Blender / MCP
 
