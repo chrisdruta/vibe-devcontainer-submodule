@@ -3,6 +3,34 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## v0.7.0 — 2026-07-18
+
+- **New: image review — `vibe review` and the tmux `preview` window.**
+  `scripts/preview-viewer.sh` watches a directory for image batches
+  (`VIBE_PREVIEW_DIR` / `VIBE_PREVIEW_GLOB` in `config.env`), renders them
+  newest-first with single-key navigation, and appends approve/reject
+  verdicts to a JSONL file (`VIBE_PREVIEW_DECISIONS`; append-only, last line
+  per path wins) for a pipeline or agent to consume. Run it as `vibe review`
+  in any host terminal — chafa renders straight to it, no tmux in the pixel
+  path (the reliable mode) — or as a dedicated `preview` tmux window via
+  `prefix + i`. Baked into the image as `/usr/local/bin/vibe-preview` —
+  rebuild required.
+- **Changed: Claude Code image hooks feed the review window** instead of
+  popping preview splits — transient splits cannot reliably hold a sixel
+  render on tmux 3.5a (client redraws replace images with placeholders;
+  passthrough smears next to a busy TUI). The hook ensures the window
+  exists (detached, never steals focus) and enqueues the path; the window
+  name lights up via `monitor-activity` when unfocused. A prompt paste the
+  TUI converts to an `[Image #N]` attachment carries no path in the hook
+  payload; the hook falls back to the newest `/tmp/clip-*.png` under 10
+  minutes old. `VIBE_PREVIEW_SECONDS` and the 30s debounce are retired.
+- **Changed: in-tmux sixel rendering hardened** — the viewer sizes images by
+  measuring the emitted sixel raster (chafa's captured-output cell metrics
+  are unreliable), centers with margins so the header stays visible, ships
+  the image as a self-positioning anchored passthrough envelope, and heals
+  redraw-wiped pixels flicker-free a tick later. `vibe show` with no
+  argument now also considers the watch directory.
+
 ## v0.6.0 — 2026-07-18
 
 - **New: auto image preview in Claude Code sessions** — hooks in
