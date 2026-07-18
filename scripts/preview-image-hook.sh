@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 #
-# Claude Code hook: auto-preview images beside the TUI. Wired (via
+# Claude Code hook: feed images into the review window. Wired (via
 # templates/claude-settings.json) to two events:
 #   UserPromptSubmit — an image path pasted into the prompt (e.g. from
-#     `vibe clip`) pops a preview split the moment you submit;
+#     `vibe clip`) queues into the viewer the moment you submit;
 #   PostToolUse (matcher: Read) — whenever the agent reads an image file,
-#     you see what it sees.
-# The TUI itself can't render images (upstream: not planned), so this is the
-# closest thing to inline display: a transient, unfocused tmux split running
-# show-image.sh that closes itself after VIBE_PREVIEW_SECONDS (default 15).
+#     you can see what it sees.
+# The TUI itself can't render images (upstream: not planned), and transient
+# splits can't hold a sixel render on tmux 3.5a (client redraws replace
+# images with placeholders — see preview-viewer.sh for the full constraint
+# set). So: ensure the dedicated "preview" window exists (detached, never
+# steals focus) and enqueue the path; the viewer renders it if its window is
+# active, otherwise the window name lights up in the status bar.
 #
 # Hook contract: JSON on stdin; stdout must stay EMPTY (UserPromptSubmit
 # stdout is injected into the model's context). Always exit 0 — a preview
@@ -55,32 +58,14 @@ case "$event" in
 esac
 [ -n "$path" ] && [ -f "$path" ] || exit 0
 
-# Debounce: prompt-paste and the agent's subsequent Read of the same file
-# would otherwise pop two previews back to back. Keyed per window so parallel
-# agent sessions in other windows don't suppress each other's previews.
-window="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{window_id}' 2>/dev/null)" || window=w0
-last_file="/tmp/.vibe-preview-last-${window#@}"
-now="$(date +%s)"
-if [ -f "$last_file" ]; then
-  read -r last_path last_time <"$last_file" || true
-  if [ "$last_path" = "$path" ] && [ $((now - ${last_time:-0})) -lt 30 ]; then
-    exit 0
-  fi
-fi
-printf '%s %s\n' "$path" "$now" >"$last_file"
+# Duplicate events (prompt-paste then the agent's Read of the same file) need
+# no debounce anymore: enqueueing the same path twice just re-selects it.
+session="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_id}' 2>/dev/null)" || exit 0
+[ -n "$session" ] || exit 0
+bash "$script_dir/preview-viewer.sh" --ensure "$session" >/dev/null 2>&1 || exit 0
 
-# One preview at a time: replace any pane a previous invocation left open.
-tmux list-panes -F '#{pane_id} #{pane_title}' 2>/dev/null |
-  awk '$2 == "vibe-preview" {print $1}' |
-  while read -r pane; do tmux kill-pane -t "$pane" 2>/dev/null; done
-
-# The split opens detached (-d) and never touches focus: the image is
-# ordinary pane content (tmux composites native sixel — see show-image.sh),
-# so it renders correctly and survives repaints no matter which pane is
-# active or how busy the TUI is. The pane closes itself after
-# VIBE_PREVIEW_SECONDS.
-# The pane titles itself (OSC 2) rather than via `select-pane -T`, which can
-# change the active pane.
-tmux split-window -d -v -l '35%' \
-  "printf '\\033]2;vibe-preview\\033\\\\'; bash '$script_dir/show-image.sh' '$path'; sleep ${VIBE_PREVIEW_SECONDS:-15}" 2>/dev/null || exit 0
+# Append under the same flock the viewer's drain-then-truncate takes, so a
+# path can't vanish between its read and reset.
+queue=/tmp/.vibe-preview-queue
+( flock -x 8; printf '%s\n' "$path" >>"$queue" ) 8>>"$queue" 2>/dev/null
 exit 0

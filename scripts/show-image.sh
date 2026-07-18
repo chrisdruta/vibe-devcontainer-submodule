@@ -11,12 +11,25 @@ set -euo pipefail
 
 path="${1:-}"
 if [ -z "$path" ]; then
-  # Newest clip by mtime; clip filenames sort by timestamp too, but mtime also
-  # covers files copied in by other means.
-  path="$(find /tmp -maxdepth 1 -name 'clip-*.png' -printf '%T@ %p\n' 2>/dev/null |
-    sort -rn | head -1 | cut -d' ' -f2-)"
+  # Newest image by mtime across /tmp clips AND the review-viewer watch dir
+  # (VIBE_PREVIEW_DIR/GLOB, resolved the same way preview-viewer.sh does).
+  script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+  for cfg in "$script_dir/../../config.env" "$PWD/.devcontainer/config.env"; do
+    # shellcheck disable=SC1090  # runtime project config, path known only here
+    if [ -f "$cfg" ]; then . "$cfg"; break; fi
+  done
+  watch_dir="${VIBE_PREVIEW_DIR:-/tmp}"
+  name_args=()
+  for g in ${VIBE_PREVIEW_GLOB:-*.png *.jpg *.jpeg *.webp}; do # deliberate split
+    if [ "${#name_args[@]}" -gt 0 ]; then name_args+=(-o); fi
+    name_args+=(-name "$g")
+  done
+  path="$({
+    find /tmp -maxdepth 1 -name 'clip-*.png' -printf '%T@ %p\n' 2>/dev/null
+    find "$watch_dir" -maxdepth 1 -type f \( "${name_args[@]}" \) -printf '%T@ %p\n' 2>/dev/null
+  } | sort -rn | head -1 | cut -d' ' -f2-)"
   if [ -z "$path" ]; then
-    echo "No clipped images in /tmp — run \`vibe clip\` on the host first, or pass a path." >&2
+    echo "No images in /tmp or $watch_dir — run \`vibe clip\` on the host first, or pass a path." >&2
     exit 1
   fi
 fi

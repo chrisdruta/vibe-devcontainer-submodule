@@ -128,41 +128,60 @@ written straight through the bind mount (no running container required):
 
 Gitignore the directory if you use this mode routinely.
 
-### Seeing what you clipped
+### Reviewing images
 
 Agent TUIs show attached images only as a `[Image 1]` placeholder — the Claude
-Code terminal UI cannot render images inline (upstream: not planned). To eyeball
-an image, render it with sixel graphics instead:
+Code terminal UI cannot render images inline (upstream: not planned). The
+harness renders them with sixel graphics instead, in a dedicated tmux window:
 
-- `vibe show` (host or container) previews the newest `/tmp/clip-*.png`;
-  `vibe show PATH` previews any image.
-- Inside the agent tmux session, **prefix + `i`** opens the same preview in a
-  transient split pane; Enter closes it.
+- Inside the agent tmux session, **prefix + `i`** jumps to (or creates) the
+  **`preview` window** — a full-window image review UI.
+- `vibe show [PATH]` (host, outside tmux) renders one image in the invoking
+  terminal; with no argument, the newest clip or watched image.
 
-Both use `chafa`. Inside tmux the raw sixel is composited by tmux's native
-image support — the image is ordinary pane content, so tmux handles clipping,
-scrolling, and repaints. That needs a sixel-capable outer terminal (Windows
-Terminal ≥ 1.22 qualifies; tmux auto-detects it — check
-`tmux display -p '#{client_termfeatures}'`). Outside tmux, `chafa` probes the
-terminal and falls back to unicode blocks where sixel is unavailable.
+The `preview` window is built for batch review (e.g. generated images or
+render batches landing in a directory): it watches `VIBE_PREVIEW_DIR` for
+files matching `VIBE_PREVIEW_GLOB` (both in `config.env`; defaults `/tmp` and
+common image extensions), newest first. Keys, single press:
 
-Claude Code sessions go one better: hooks in the seeded `.claude/settings.json`
-(from `templates/claude-settings.json`) auto-open the preview split — when you
-submit a prompt containing an image path, and whenever the agent `Read`s an
-image file, so you see what it sees. The split opens in the background and
-never takes focus, and is vertical (width changes trigger a known Claude-TUI
-rewrap stall). It closes itself after `VIBE_PREVIEW_SECONDS`
-(default 15; set it in `config.env`).
-Repeats of the same image within 30s are debounced per window.
+| Key | Action |
+| --- | --- |
+| `h` / `←` | newer image |
+| `l` / `→` | older image |
+| `g` | jump to newest |
+| `y` | approve (recorded, advances) |
+| `n` / `x` | reject (recorded, advances) |
+| `r` | force re-render |
+| `q` | close the window |
 
-When Claude Code converts a pasted path into an `[Image #N]` *attachment*,
-the path never reaches the hook (the prompt text only contains the
-placeholder, and the model gets the pixels directly, so no `Read` fires
-either). The hook falls back to previewing the newest `/tmp/clip-*.png`
-captured in the last 10 minutes — right for the `vibe clip` → paste flow.
-Images attached any other way (or workspace-mode clips) still show nothing;
-use `prefix + i`. Existing projects adopt the hooks by merging the template
-block during a [pin update](updating.md).
+Verdicts append to a JSONL decisions file (`VIBE_PREVIEW_DECISIONS`, default
+`vibe-decisions.jsonl` inside the watch dir): one
+`{"ts":…,"path":…,"verdict":"approve"|"reject"}` per line, append-only — the
+last line per path wins. A pipeline or agent consumes it with e.g.
+`jq -s 'group_by(.path) | map(last)' vibe-decisions.jsonl`. Point
+`VIBE_PREVIEW_DIR` (and the decisions file) at your render-output directory
+to review batches in place and let the generating agent read the verdicts.
+
+Claude Code sessions feed the viewer automatically: hooks in the seeded
+`.claude/settings.json` (from `templates/claude-settings.json`) fire when you
+submit a prompt containing an image path and whenever the agent `Read`s an
+image file. The image queues into the viewer and is selected there; if the
+`preview` window isn't focused, its name lights up in the status bar instead
+of anything stealing your screen. When Claude Code converts a pasted path
+into an `[Image #N]` *attachment* the path never reaches the hook (the
+payload only carries the placeholder), so the hook falls back to the newest
+`/tmp/clip-*.png` captured in the last 10 minutes — right for the
+`vibe clip` → paste flow. Existing projects adopt the hooks by merging the
+template block during a [pin update](updating.md).
+
+Rendering notes: sixel needs a capable outer terminal (Windows Terminal
+≥ 1.22 qualifies; tmux auto-detects — check
+`tmux display -p '#{client_termfeatures}'`); other clients degrade to
+`chafa` cell art. tmux 3.5a drops sixel images on client redraws and pane
+resizes, which is why review lives in its own window (tmux only repaints the
+active window) and the viewer re-renders on entry — `r` recovers any
+leftover glitch. Outside tmux, `chafa` probes the terminal and falls back to
+unicode blocks where sixel is unavailable.
 
 ## Troubleshooting
 

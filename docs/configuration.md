@@ -18,6 +18,9 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `DEV_AUTO_GIT_LFS`      | `1`                           | Repo-local `git lfs install` when LFS attributes exist |
 | `DEV_ENV_FILE`          | `.env`                        | File loaded by `vibe agent` / `vibe run` / `env-run.sh` |
 | `DEV_REQUIRED_COMMANDS` | `git gh jq rg uv claude` (+preset) | Commands `vibe doctor` requires                |
+| `VIBE_PREVIEW_DIR`      | `/tmp`                        | Directory the image review window watches (see [usage.md](usage.md)) |
+| `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.webp`   | Space-separated glob list for the watch directory  |
+| `VIBE_PREVIEW_DECISIONS`| `vibe-decisions.jsonl` in the watch dir | JSONL file approve/reject verdicts append to |
 
 ## Bootstrap behavior
 
