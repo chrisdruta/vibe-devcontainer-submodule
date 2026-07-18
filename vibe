@@ -183,6 +183,15 @@ case "$command_name" in
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
       bash .devcontainer/harness/scripts/show-image.sh "$@"
     ;;
+  review)
+    # Interactive image review (watch dir + approve/reject verdicts) in the
+    # INVOKING terminal: chafa renders straight to it, no tmux between the
+    # pixels and the screen — the reliable path; prefix+i inside the agent
+    # session is the best-effort tmux flavor of the same viewer.
+    ensure_up
+    exec "${cli[@]}" exec --workspace-folder "$repo_root" \
+      bash .devcontainer/harness/scripts/preview-viewer.sh "$@"
+    ;;
   clip)
     # Host-side: grabs the OS clipboard image; container /tmp by default, or a
     # workspace-relative directory when given (vibe clip .captures). Workspace
@@ -209,6 +218,7 @@ Commands:
   exec        Run an arbitrary command in the container (no .env loading)
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
   show        Preview an image in the terminal (default: newest vibe clip capture)
+  review      Review images interactively (navigate, approve/reject to JSONL)
 HELP
     ;;
   *)

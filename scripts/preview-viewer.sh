@@ -7,15 +7,18 @@
 # whatever a Claude Code hook just surfaced (preview-image-hook.sh feeds the
 # queue file below).
 #
-# Why a dedicated window and not a split: on tmux 3.5a sixel is reliable ONLY
-# while the image's own window is active — tmux repaints just the active
-# window, so a busy agent TUI elsewhere can't clobber it. Client redraws
-# replace images with placeholders and pane resizes drop them outright
-# (tmux/tmux#4499, #4639, #5126; overwrite fix #4364 landed after 3.5a), so
-# the viewer re-renders on window re-entry, on SIGWINCH, and on demand (`r`).
-# Passthrough envelopes are a dead end — they paint at the client cursor and
-# client scroll optimizations smear them into ghosts; hence the explicit
-# `--passthrough none` guard on chafa.
+# Why a dedicated window and not a split: sixel under tmux 3.5a survives
+# only in a calm window. Native ingestion (no passthrough) is a dead letter
+# on this build — tmux stores the image but never re-emits it to the
+# client, so even fresh renders appear as "+" placeholders (see also
+# tmux/tmux#4499, #4639, #5126). Passthrough renders for real but paints at
+# the client cursor, so any window shared with a busy agent TUI smears it
+# into ghosts (cursor drag, scroll optimizations). A dedicated window the
+# viewer fully owns removes every disturber: the cursor is ours, nothing
+# scrolls, tmux repaints only the active window. The viewer still
+# re-renders on window re-entry, on SIGWINCH, on demand (`r`), and once
+# more a tick after each render (entry/resize redraw storms can eat the
+# first pass).
 #
 # Modes:
 #   (no args)          run the UI — must be a tmux pane's own process
@@ -61,10 +64,13 @@ case "${1:-}" in
     ;;
 esac
 
-[ -n "${TMUX:-}" ] || {
-  echo "Run inside the agent tmux session (prefix+i), or use \`vibe show\` outside tmux." >&2
-  exit 1
-}
+# Two homes: a tmux window (prefix+i — best effort, see header), or a plain
+# host terminal via `vibe review` (devcontainer exec with a pty) — the
+# RELIABLE one: chafa probes the real terminal and emits sixel with no tmux
+# between the pixels and the screen.
+in_tmux=""
+[ -n "${TMUX:-}" ] && in_tmux=1
+[ -t 0 ] || { echo "preview-viewer needs an interactive terminal" >&2; exit 1; }
 command -v chafa >/dev/null 2>&1 || { echo "chafa not installed" >&2; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "jq not installed" >&2; exit 1; }
 
@@ -86,7 +92,7 @@ watch_glob="${VIBE_PREVIEW_GLOB:-*.png *.jpg *.jpeg *.webp}"
 decisions="${VIBE_PREVIEW_DECISIONS:-${watch_dir%/}/vibe-decisions.jsonl}"
 
 # Light the window name in the status bar when we print while unfocused.
-tmux set-option -w -t "${TMUX_PANE:-}" monitor-activity on 2>/dev/null
+[ -n "$in_tmux" ] && tmux set-option -w -t "${TMUX_PANE:-}" monitor-activity on 2>/dev/null
 
 name_args=()
 for g in $watch_glob; do # deliberate word split: glob list is space-separated
@@ -182,8 +188,13 @@ move() { # older|newer|newest — selection is by path; index recomputed per sca
   fi
 }
 
-render() {
+render() { # $1 "heal" = follow-up pass, don't schedule another
   need_render=""
+  # In tmux, a render can land mid client-redraw (window switch, resize
+  # settling) and get wiped; one follow-up pass on the next tick repaints it
+  # after the storm. Identical bytes at identical coordinates — harmless
+  # when the first pass survived. Pointless outside tmux.
+  if [ "${1:-}" = "heal" ] || [ -z "$in_tmux" ]; then heal_left=0; else heal_left=1; fi
   local cols rows idx
   cols="$(tput cols 2>/dev/null || echo 80)"
   rows="$(tput lines 2>/dev/null || echo 24)"
@@ -197,11 +208,34 @@ render() {
   printf '[%d/%d] %s  (%s)\n' "$((idx + 1))" "${#images[@]}" \
     "$(basename -- "$current")" "$(verdict_of "$current")"
   printf 'h/< newer  l/> older  g newest  y approve  n/x reject  r redraw  q quit\n'
-  # Sixel only for clients tmux says can take it; everyone else gets cell art,
-  # which tmux composites without any of the image bugs.
-  if tmux display-message -p '#{client_termfeatures}' 2>/dev/null | grep -q sixel; then
-    chafa -f sixel --passthrough none -s "${cols}x$((rows - 3))" -- "$current" 2>/dev/null ||
+  if [ -z "$in_tmux" ]; then
+    # Plain terminal (`vibe review` from the host): chafa probes it directly
+    # and picks sixel or unicode blocks itself — no tmux anywhere. This is
+    # the zero-caveat path.
+    chafa -s "${cols}x$((rows - 3))" -- "$current" 2>/dev/null ||
       printf '(render failed — press r to retry)\n'
+  elif tmux display-message -p '#{client_termfeatures}' 2>/dev/null | grep -q sixel; then
+    # In tmux, a hand-anchored passthrough envelope — the only variant that
+    # rendered deterministically on 3.5a. Native ingestion redraws as "+"
+    # placeholders, and BARE passthrough races: tmux batches pane-text
+    # drawing but forwards passthrough bytes immediately, so the image can
+    # reach the client before the header text that positioned the cursor.
+    # Self-positioning inside the envelope (save cursor, absolute jump,
+    # draw, restore) is immune to both, and this window never scrolls, so
+    # the shared-window ghost problem can't occur either.
+    local img esc row
+    img="$(chafa -f sixel --passthrough none -s "${cols}x$((rows - 3))" -- "$current" 2>/dev/null)"
+    if [ -z "$img" ]; then
+      printf '(render failed — press r to retry)\n'
+      return
+    fi
+    row=3 # image starts under the two header lines; window origin is client row 1
+    if [ "$(tmux show -gv status-position 2>/dev/null)" = "top" ]; then row=4; fi
+    esc="$(printf '\033')"
+    printf '\033Ptmux;'
+    printf '\0337\033[%d;1H%s\0338' "$row" "$img" | sed "s/$esc/$esc$esc/g"
+    # shellcheck disable=SC1003  # literal backslash: the ST terminator, not a quote escape
+    printf '\033\\'
   else
     chafa -f symbols -s "${cols}x$((rows - 3))" -- "$current" 2>/dev/null ||
       printf '(render failed — press r to retry)\n'
@@ -222,10 +256,16 @@ while :; do
   sig="${#images[@]}:${images[0]:-}"
   active="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{window_active}' 2>/dev/null)"
   if [ "$active" = "1" ]; then
-    # Re-entry and resizes both invalidate whatever sixel was on screen.
+    # Re-entry and resizes both invalidate whatever sixel was on screen; a
+    # changed image list refreshes the [n/total] header.
     [ "$last_active" != "1" ] && need_render=1
+    [ "$sig" != "$last_sig" ] && need_render=1
     [ -n "$winch" ] && winch="" && need_render=1
-    [ -n "$need_render" ] && render
+    if [ -n "$need_render" ]; then
+      render
+    elif [ "${heal_left:-0}" -gt 0 ]; then
+      render heal
+    fi
   elif [ "$sig" != "$last_sig" ] && [ -n "${images[0]:-}" ]; then
     # Unfocused: one short line trips monitor-activity; render waits for entry.
     printf 'new: %s (%d total)\n' "$(basename -- "${images[0]}")" "${#images[@]}"

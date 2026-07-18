@@ -134,8 +134,12 @@ Agent TUIs show attached images only as a `[Image 1]` placeholder — the Claude
 Code terminal UI cannot render images inline (upstream: not planned). The
 harness renders them with sixel graphics instead, in a dedicated tmux window:
 
+- **`vibe review`** (host, any terminal tab) runs the full review UI in the
+  invoking terminal — chafa renders straight to it with no tmux between the
+  pixels and the screen. This is the reliable path.
 - Inside the agent tmux session, **prefix + `i`** jumps to (or creates) the
-  **`preview` window** — a full-window image review UI.
+  **`preview` window** — the same UI as a tmux window (best effort: tmux
+  3.5a's sixel handling has rough edges; `r` re-renders).
 - `vibe show [PATH]` (host, outside tmux) renders one image in the invoking
   terminal; with no argument, the newest clip or watched image.
 

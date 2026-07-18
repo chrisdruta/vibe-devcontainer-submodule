@@ -40,15 +40,15 @@ fi
 
 echo "$path"
 if [ -n "${TMUX:-}" ]; then
-  # Inside tmux emit RAW sixel and let tmux composite it: this build has
-  # native sixel support and tmux auto-detects sixel-capable clients (check
-  # `tmux display -p '#{client_termfeatures}'`), so the image becomes ordinary
-  # pane content — tmux handles clipping, scrolling, and repaints itself.
-  # Do NOT wrap in a passthrough envelope: passthrough bytes paint at the
-  # client cursor, which a busy neighbor pane (an agent TUI spinner) drags
-  # away mid-splice, and client-level scroll optimizations shift the painted
-  # pixels, leaving ghost copies tmux knows nothing about.
-  exec chafa -f sixel "$path"
+  # Inside tmux, sixel in a passthrough envelope (explicit — chafa's "auto"
+  # default already means this, but leave no room for drift): this tmux
+  # build ingests raw sixel yet never re-emits it to the client, so native
+  # compositing shows only "+" placeholders. Passthrough paints at the
+  # client cursor — correct when this pane is focused in a calm window
+  # (manual use, the review viewer's window), garbage next to a busy agent
+  # TUI, which is why hooks feed preview-viewer.sh instead of rendering
+  # into shared windows.
+  exec chafa -f sixel --passthrough tmux "$path"
 fi
 if [ -t 1 ]; then
   exec chafa "$path"
