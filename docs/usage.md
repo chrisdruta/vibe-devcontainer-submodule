@@ -155,12 +155,14 @@ vertical (width changes trigger a known Claude-TUI rewrap stall). It closes
 itself after `VIBE_PREVIEW_SECONDS` (default 15; set it in `config.env`).
 Repeats of the same image within 30s are debounced per window.
 
-Known blind spot: when Claude Code converts a pasted path into an
-`[Image #N]` *attachment*, the path never reaches the hook (the prompt text
-only contains the placeholder, and the model gets the pixels directly, so no
-`Read` fires either). No auto-preview pops in that case — use `prefix + i`. Existing
-projects adopt the hooks by merging the template block during a
-[pin update](updating.md).
+When Claude Code converts a pasted path into an `[Image #N]` *attachment*,
+the path never reaches the hook (the prompt text only contains the
+placeholder, and the model gets the pixels directly, so no `Read` fires
+either). The hook falls back to previewing the newest `/tmp/clip-*.png`
+captured in the last 10 minutes — right for the `vibe clip` → paste flow.
+Images attached any other way (or workspace-mode clips) still show nothing;
+use `prefix + i`. Existing projects adopt the hooks by merging the template
+block during a [pin update](updating.md).
 
 ## Troubleshooting
 

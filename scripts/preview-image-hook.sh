@@ -26,8 +26,21 @@ case "$event" in
   UserPromptSubmit)
     # First absolute image path mentioned in the prompt (paths with spaces
     # won't match — fine for /tmp/clip-*.png and typical workspace paths).
-    path="$(jq -r '.prompt // empty' <<<"$payload" |
-      grep -oE '/[^[:space:]"'"'"']+\.(png|jpe?g|gif|webp|bmp)' | head -1)"
+    prompt="$(jq -r '.prompt // empty' <<<"$payload")"
+    path="$(grep -oE '/[^[:space:]"'"'"']+\.(png|jpe?g|gif|webp|bmp)' <<<"$prompt" | head -1)"
+    if [ -z "$path" ]; then
+      case "$prompt" in
+        *'[Image #'*)
+          # Pasting the path of an EXISTING image makes the TUI attach the
+          # file and replace the text with "[Image #N]" — the payload never
+          # carries the path, and the agent won't Read a file it already
+          # received, so neither hook event would fire. Best effort: preview
+          # the newest recent `vibe clip` capture (workspace-mode clips and
+          # images attached by other means won't match — acceptable).
+          path="$(find /tmp -maxdepth 1 -name 'clip-*.png' -mmin -10 2>/dev/null | sort | tail -1)"
+          ;;
+      esac
+    fi
     ;;
   PostToolUse)
     path="$(jq -r '.tool_input.file_path // empty' <<<"$payload")"
