@@ -3,7 +3,7 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
-## Unreleased
+## v0.6.0 — 2026-07-18
 
 - **New: auto image preview in Claude Code sessions** — hooks in
   `templates/claude-settings.json` (`UserPromptSubmit` + `PostToolUse: Read`
