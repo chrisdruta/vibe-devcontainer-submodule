@@ -12,7 +12,10 @@ All commands run via the seeded wrapper — or as plain `vibe` with the
 | `up`        | Build (if needed) and start the Dev Container                          |
 | `rebuild`   | Recreate the container — required after editing `devcontainer.json` or the Dockerfile |
 | `build`     | Build the image only                                                   |
+| `status`    | Show this project's container(s) — name, state, image, ports (needs a docker client) |
+| `down`      | Stop & remove this project's container; named volumes (agent state) are kept — `vibe up` recreates it |
 | `shell`     | Open a Bash shell in the container                                     |
+| `attach [SESSION]` | Attach (or create) a tmux session in the container — the door into a services session your `project/post-start.sh` stands up. Name: argument > `DEV_ATTACH_TMUX_SESSION` > `main` |
 | `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
 | `run CMD`   | Run any command with explicit `.env` loading (e.g. `vibe run codex`)    |
 | `exec CMD`  | Run any command **without** `.env` loading                             |

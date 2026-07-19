@@ -3,6 +3,20 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## v0.7.2 — 2026-07-19
+
+- **New: `vibe status` / `vibe down`.** Host-side container lifecycle without
+  raw docker incantations: `status` lists this project's container(s) (name,
+  state, image, ports); `down` stops & removes the container while leaving
+  named volumes (agent state) untouched — `vibe up` recreates it. Both match
+  by the devcontainer CLI's `devcontainer.local_folder` label and need a
+  docker client on the host.
+- **New: `vibe attach [SESSION]`.** Attach (or create) an arbitrary tmux
+  session in the container — the door into a long-lived services session a
+  project's `project/post-start.sh` stands up (dev servers, watchers, …).
+  Session name resolves argument > new `DEV_ATTACH_TMUX_SESSION` config.env
+  key (seeded commented-out) > `main`. Replaces per-project attach scripts.
+
 ## v0.7.1 — 2026-07-18
 
 - **Changed: the image viewer is passive by default.** Verdict keys and the
