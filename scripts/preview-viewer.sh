@@ -16,9 +16,15 @@
 # into ghosts (cursor drag, scroll optimizations). A dedicated window the
 # viewer fully owns removes every disturber: the cursor is ours, nothing
 # scrolls, tmux repaints only the active window. The viewer still
-# re-renders on window re-entry, on SIGWINCH, on demand (`r`), and once
-# more a tick after each render (entry/resize redraw storms can eat the
-# first pass).
+# re-renders on window re-entry, on SIGWINCH, on demand (`r`), and heals
+# the cached raster on idle ticks (entry/resize redraw storms can eat any
+# pass, including the first).
+#
+# Pixels: vibe_render_sixel (preview-lib.sh) — img2sixel nearest-neighbor
+# integer upscaling for small png/jpeg/gif/bmp (real format sniffed from
+# magic bytes, never the extension), chafa smooth for everything else.
+# Renderer errors surface in the UI and in the debug log; `d` shows the
+# full diagnosis for the current image.
 #
 # Modes:
 #   (no args)          run the UI — must be a tmux pane's own process
@@ -72,6 +78,18 @@ case "${1:-}" in
     ;;
 esac
 
+# Shared render/sniff/diagnostics helpers — same two homes as this script:
+# a harness checkout (beside us) or the baked copy from the Dockerfile.
+lib_ok=""
+for _lib in "$script_dir/preview-lib.sh" /usr/local/lib/vibe/preview-lib.sh; do
+  # shellcheck source=preview-lib.sh disable=SC1091
+  if [ -f "$_lib" ]; then . "$_lib" && lib_ok=1; break; fi
+done
+if [ -z "$lib_ok" ]; then
+  echo "preview-lib.sh not found (harness checkout incomplete, or old baked image — vibe rebuild)" >&2
+  exit 1
+fi
+
 # Optional positional DIR: review that directory as a batch (per-stage dirs in
 # a generation pipeline — `vibe review renders/asset42/angles`).
 review_dir=""
@@ -114,7 +132,7 @@ for cfg in "$script_dir/../../config.env" "$PWD/.devcontainer/config.env"; do
   if [ -f "$cfg" ]; then . "$cfg"; break; fi
 done
 watch_dir="${review_dir:-${VIBE_PREVIEW_DIR:-/tmp}}"
-watch_glob="${VIBE_PREVIEW_GLOB:-*.png *.jpg *.jpeg *.webp}"
+watch_glob="${VIBE_PREVIEW_GLOB:-$(vibe_default_glob)}"
 
 # Review mode only with an explicit decisions target: VIBE_PREVIEW_DECISIONS
 # (config.env or environment) wins; a DIR argument implies its own batch file.
@@ -135,7 +153,7 @@ fi
 name_args=()
 for g in $watch_glob; do # deliberate word split: glob list is space-separated
   if [ "${#name_args[@]}" -gt 0 ]; then name_args+=(-o); fi
-  name_args+=(-name "$g")
+  name_args+=(-iname "$g")
 done
 
 images=()
@@ -150,7 +168,7 @@ last_dcs="" # cached bare sixel DCS + anchor of the last render, for emit_last
 last_row=1
 last_col=1
 trap 'winch=1' WINCH
-trap 'printf "\033[2J\033[H"' EXIT
+trap 'printf "\033[2J\033[H"; rm -f -- "$VIBE_RENDER_ERR"' EXIT
 
 scan() {
   local entries=() line path
@@ -249,9 +267,10 @@ emit_last() {
   # Flicker-free heal: re-emit only the cached sixel envelope, over itself.
   # A render can land mid client-redraw (window switch, resize settling) and
   # get wiped; the text survives in tmux's grid, so repainting just the
-  # pixels one tick later repairs the image without a clear — invisible when
-  # the first pass survived.
-  heal_left=0
+  # pixels repairs the image without a clear — invisible when the previous
+  # pass survived. The main loop calls this on every idle tick (heal_left
+  # only meters the staggered fallback for very large rasters).
+  heal_left=$((${heal_left:-0} > 0 ? heal_left - 1 : 0))
   [ -n "$last_dcs" ] || return 0
   local esc
   esc="$(printf '\033')"
@@ -278,10 +297,10 @@ render() {
   if [ -n "$review" ]; then
     printf '[%d/%d] %s  (%s)\n' "$((idx + 1))" "${#images[@]}" \
       "$(basename -- "$current")" "$(verdict_of "$current")"
-    printf 'h/< newer  l/> older  g newest  y approve  n/x reject(+note)  r redraw  q quit\n\n'
+    printf 'h/< newer  l/> older  g newest  y approve  n/x reject(+note)  r redraw  d details  q quit\n\n'
   else
     printf '[%d/%d] %s\n' "$((idx + 1))" "${#images[@]}" "$(basename -- "$current")"
-    printf 'h/< newer  l/> older  g newest  r redraw  q quit\n\n'
+    printf 'h/< newer  l/> older  g newest  r redraw  d details  q quit\n\n'
   fi
   # Image box: side and bottom margins, centered via chafa (it composes the
   # padding into the canvas, so the anchored sixel below stays one block).
@@ -291,11 +310,42 @@ render() {
   if [ "$iw" -lt 4 ]; then iw=4; fi
   if [ "$ih" -lt 3 ]; then ih=3; fi
   if [ -z "$in_tmux" ]; then
-    # Plain terminal (`vibe review` from the host): chafa probes it directly
-    # and picks sixel or unicode blocks itself — no tmux anywhere. This is
-    # the zero-caveat path.
-    chafa --align mid,mid -s "${iw}x${ih}" -- "$current" 2>/dev/null ||
-      printf '(render failed — press r to retry)\n'
+    # Plain terminal (`vibe review` from the host) — the zero-caveat home.
+    # When the terminal answers the DA1 probe with sixel support, use the
+    # shared renderer (crisp img2sixel nearest-neighbor for small
+    # stb-format images, measured chafa otherwise), with the budget sized
+    # by real cell metrics where the terminal reports them (XTWINOPS 16).
+    # No sixel, or an unanswered probe: chafa probes the terminal itself
+    # and picks sixel or unicode blocks — the original path, untouched.
+    local raw pxw pxh cellw cellh hoff
+    if term_has_sixel; then
+      read -r cellw cellh <<<"$(term_cell_px)" || :
+      if vibe_render_sixel "$current" "$iw" "$ih" $((iw * cellw)) $((ih * cellh)); then
+        hoff=$(((iw - (pxw + cellw - 1) / cellw) / 2))
+        [ "$hoff" -lt 0 ] && hoff=0
+        printf '\033[%dG' $((hoff + 1))
+        printf '%s\n' "$raw"
+        dlog "OK $current fmt=$last_fmt renderer=$last_renderer scale=$last_scale out=${pxw}x${pxh}"
+      else
+        printf '(render failed via %s: %s%s — d details, r retry)\n' \
+          "${last_renderer:-?}" "$last_err" "$(vibe_format_mismatch)"
+        dlog "FAIL $current fmt=$last_fmt renderer=$last_renderer rc=$last_rc err=$last_err"
+      fi
+    else
+      last_fmt="$(sniff_format "$current")"
+      # shellcheck disable=SC2034  # read by the lib's vibe_diag_report
+      last_ext="$(ext_format "$current")"
+      last_renderer="chafa (self-probed)"
+      last_scale=auto
+      chafa --animate off --align mid,mid -s "${iw}x${ih}" -- "$current" 2>"$VIBE_RENDER_ERR"
+      last_rc=$?
+      if [ "$last_rc" -ne 0 ]; then
+        last_err="$(head -n 1 -- "$VIBE_RENDER_ERR" 2>/dev/null)"
+        printf '(render failed: %s%s — d details, r retry)\n' \
+          "${last_err:-unknown}" "$(vibe_format_mismatch)"
+        dlog "FAIL $current fmt=$last_fmt renderer=$last_renderer rc=$last_rc err=$last_err"
+      fi
+    fi
   elif tmux display-message -p '#{client_termfeatures}' 2>/dev/null | grep -q sixel; then
     # In tmux, a hand-anchored passthrough envelope — the only variant that
     # rendered deterministically on 3.5a. Native ingestion redraws as "+"
@@ -305,38 +355,24 @@ render() {
     # Self-positioning inside the envelope (save cursor, absolute jump,
     # draw, restore) is immune to both, and this window never scrolls, so
     # the shared-window ghost problem can't occur either.
-    # Sizing is measured, not predicted: chafa's cell→pixel mapping when its
-    # output is captured bears no relation to the real terminal's cell size
-    # (observed: images rendered beyond the whole screen). So render, read
-    # the true pixel size from the sixel raster header ("Pan;Pad;Ph;Pv), and
-    # if it busts a conservative pixel budget for the box (10x20 px/cell —
-    # real cells are almost always bigger, so output errs SMALL and fits),
-    # rescale the request proportionally and render once more.
-    local raw img esc row col voff hoff pxw pxh budw budh num den iw2 ih2 cw ch
-    budw=$((iw * 10))
-    budh=$((ih * 20))
-    raw="$(chafa -f sixel --passthrough none -s "${iw}x${ih}" -- "$current" 2>/dev/null)"
-    read -r pxw pxh <<<"$(printf '%s' "$raw" | head -c 200 |
-      sed -n 's/.*q"[0-9][0-9]*;[0-9][0-9]*;\([0-9][0-9]*\);\([0-9][0-9]*\).*/\1 \2/p')"
-    if [ -n "${pxw:-}" ] && [ -n "${pxh:-}" ] && [ "$pxw" -gt 0 ] && [ "$pxh" -gt 0 ]; then
-      if [ "$pxw" -gt "$budw" ] || [ "$pxh" -gt "$budh" ]; then
-        if [ $((pxw * budh)) -gt $((pxh * budw)) ]; then num=$budw den=$pxw; else num=$budh den=$pxh; fi
-        iw2=$((iw * num / den))
-        ih2=$((ih * num / den))
-        if [ "$iw2" -lt 1 ]; then iw2=1; fi
-        if [ "$ih2" -lt 1 ]; then ih2=1; fi
-        raw="$(chafa -f sixel --passthrough none -s "${iw2}x${ih2}" -- "$current" 2>/dev/null)"
-        read -r pxw pxh <<<"$(printf '%s' "$raw" | head -c 200 |
-          sed -n 's/.*q"[0-9][0-9]*;[0-9][0-9]*;\([0-9][0-9]*\);\([0-9][0-9]*\).*/\1 \2/p')"
-      fi
+    # Pixel production lives in vibe_render_sixel (preview-lib.sh): crisp
+    # img2sixel nearest-neighbor for small stb-format images, measured
+    # chafa otherwise. Sizing stays measured, not predicted — chafa's
+    # cell→pixel mapping when its output is captured bears no relation to
+    # the real terminal's cell size (observed: images rendered beyond the
+    # whole screen), so the lib reads the true pixel size from the sixel
+    # raster header ("Pan;Pad;Ph;Pv) and enforces a conservative pixel
+    # budget for the box (10x20 px/cell — real cells are almost always
+    # bigger, so output errs SMALL and fits; the client's true cell size
+    # is unknowable through tmux).
+    local raw img esc row col voff hoff pxw pxh cw ch
+    if ! vibe_render_sixel "$current" "$iw" "$ih" $((iw * 10)) $((ih * 20)); then
+      printf '(render failed via %s: %s%s — d details, r retry)\n' \
+        "${last_renderer:-?}" "$last_err" "$(vibe_format_mismatch)"
+      dlog "FAIL $current fmt=$last_fmt renderer=$last_renderer rc=$last_rc err=$last_err"
+      return
     fi
-    case "$raw" in
-      *$'\x1bP'*) : ;;
-      *)
-        printf '(render failed — press r to retry)\n'
-        return
-        ;;
-    esac
+    dlog "OK $current fmt=$last_fmt renderer=$last_renderer scale=$last_scale out=${pxw}x${pxh}"
     # Bare DCS only — any text decoration executed inside the envelope acts
     # at CLIENT level (spaces blank cells, a bottom-row linefeed scrolls the
     # whole screen).
@@ -356,15 +392,58 @@ render() {
     last_dcs="$img" # cache for the flicker-free heal pass
     last_row=$row
     last_col=$col
+    # Very large rasters skip the continuous idle heal; meter out a few
+    # staggered ones instead to bound client bandwidth (see the main loop).
+    [ "${#last_dcs}" -gt 2097152 ] && heal_left=3
     esc="$(printf '\033')"
     printf '\033Ptmux;'
     printf '\0337\033[%d;%dH%s\0338' "$row" "$col" "$img" | sed "s/$esc/$esc$esc/g"
     # shellcheck disable=SC1003  # literal backslash: the ST terminator, not a quote escape
     printf '\033\\'
   else
-    chafa -f symbols --align mid,mid -s "${iw}x${ih}" -- "$current" 2>/dev/null ||
-      printf '(render failed — press r to retry)\n'
+    last_fmt="$(sniff_format "$current")"
+    # shellcheck disable=SC2034  # read by the lib's vibe_diag_report
+    last_ext="$(ext_format "$current")"
+    last_renderer="chafa (symbols)"
+    last_scale="cell art (no sixel in client_termfeatures)"
+    # --animate off: chafa would otherwise PLAY an animated GIF here,
+    # blocking the whole viewer loop for the animation's duration.
+    chafa -f symbols --animate off --align mid,mid -s "${iw}x${ih}" -- "$current" 2>"$VIBE_RENDER_ERR"
+    last_rc=$?
+    if [ "$last_rc" -ne 0 ]; then
+      last_err="$(head -n 1 -- "$VIBE_RENDER_ERR" 2>/dev/null)"
+      printf '(render failed: %s%s — d details, r retry)\n' \
+        "${last_err:-unknown}" "$(vibe_format_mismatch)"
+      dlog "FAIL $current fmt=$last_fmt renderer=$last_renderer rc=$last_rc err=$last_err"
+    fi
   fi
+}
+
+diag() {
+  # `d`: why did the last render of this image do what it did — the
+  # anti-silent-blank key. Any key returns and re-renders.
+  [ -n "$current" ] || return 0
+  if [ -z "$last_renderer" ]; then # no attempt yet (e.g. window never active)
+    last_fmt="$(sniff_format "$current")"
+    # shellcheck disable=SC2034  # read by the lib's vibe_diag_report
+    last_ext="$(ext_format "$current")"
+  fi
+  printf '\033[2J\033[H'
+  printf 'render diagnostics: last attempt on this image\n\n'
+  vibe_diag_report "$current"
+  if [ -n "$in_tmux" ]; then
+    printf 'tmux:        client_termfeatures=[%s] status-position=%s\n' \
+      "$(tmux display-message -p '#{client_termfeatures}' 2>/dev/null)" \
+      "$(tmux show -gv status-position 2>/dev/null)"
+    printf 'cached DCS:  %s bytes anchored at row %s col %s\n' \
+      "${#last_dcs}" "$last_row" "$last_col"
+  else
+    printf 'terminal:    DA1 sixel=%s cell=%spx\n' \
+      "$(term_has_sixel && echo yes || echo no)" "$(term_cell_px | tr ' ' 'x')"
+  fi
+  printf '\nany key to return\n'
+  IFS= read -rsn1 -t 300 _ 2>/dev/null || :
+  need_render=1
 }
 
 while :; do
@@ -388,8 +467,18 @@ while :; do
     [ -n "$winch" ] && winch="" && need_render=1
     if [ -n "$need_render" ]; then
       render
-    elif [ "${heal_left:-0}" -gt 0 ]; then
-      emit_last
+    elif [ -n "$last_dcs" ]; then
+      # Continuous idle heal: tmux 3.5a can drop a sixel on ANY client
+      # redraw — window switch, resize settling, status-bar activity — and
+      # a single post-render heal loses whenever the redraw lands later
+      # (the observed symptom: header text, blank image, no error). Idle
+      # ticks (no key for 2s) repaint the cached envelope over itself:
+      # invisible when nothing was dropped, self-repairing within one tick
+      # when something was. Very large rasters get heal_left staggered
+      # passes instead of a continuous repaint.
+      if [ "${#last_dcs}" -le 2097152 ] || [ "${heal_left:-0}" -gt 0 ]; then
+        emit_last
+      fi
     fi
   elif [ "$sig" != "$last_sig" ] && [ -n "${images[0]:-}" ]; then
     # Unfocused: one short line trips monitor-activity; render waits for entry.
@@ -411,6 +500,7 @@ while :; do
     g) move newest ;;
     y) decide approve ;;
     n | x) decide reject ;;
+    d) diag ;;
     r) need_render=1 ;;
     q) exit 0 ;;
   esac

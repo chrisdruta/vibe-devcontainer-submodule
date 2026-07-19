@@ -63,6 +63,7 @@ COPY config/tmux.conf /etc/tmux.conf
 # per-project harness path isn't known at image build time.
 COPY --chmod=0755 scripts/show-image.sh /usr/local/bin/vibe-show-image
 COPY --chmod=0755 scripts/preview-viewer.sh /usr/local/bin/vibe-preview
+COPY --chmod=0644 scripts/preview-lib.sh /usr/local/lib/vibe/preview-lib.sh
 
 # Node is required by the npm-distributed Codex CLI and available standalone.
 RUN if [ "${INSTALL_NODE}" = "true" ] || [ "${INSTALL_CODEX}" = "true" ]; then \

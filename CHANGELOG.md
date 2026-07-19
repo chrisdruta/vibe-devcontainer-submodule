@@ -3,6 +3,33 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## v0.7.3 — 2026-07-19
+
+- **Changed: image previews render actual pixels where possible.** Small
+  `png`/`jpeg`/`gif`/`bmp` images now render through `img2sixel` with
+  integer nearest-neighbor upscaling — crisp pixels instead of smooth
+  blending, which was exactly wrong for small textures and icons; images
+  larger than the pane downscale with lanczos3. `webp`/`avif`/`svg`/`tiff`
+  stay on `chafa`. Applies to the preview window, `vibe review` (which now
+  probes the host terminal for sixel support and real cell metrics), and
+  `vibe show`.
+- **Fixed: silent blank previews from lying extensions.** The real format is
+  sniffed from magic bytes, never the file name — generated assets are often
+  webp bytes named `.jpg`, which previously routed to the wrong decoder and
+  rendered nothing.
+- **New: render diagnostics.** `vibe show --diag PATH` and the viewer's `d`
+  key report sniffed format vs extension, native size, renderer choice, exit
+  code, and the renderer's stderr; every render attempt also logs one line
+  to a self-truncating debug log
+  (`$XDG_RUNTIME_DIR/.vibe-preview-debug.log`).
+- **New: shared `preview-lib.sh`** (sniffing / rendering / diagnostics),
+  sourced by the viewer and `vibe show`, baked at
+  `/usr/local/lib/vibe/preview-lib.sh`. `vibe doctor` now checks
+  `chafa`/`img2sixel` and the tmux client's sixel support.
+- Default `VIBE_PREVIEW_GLOB` widened to `*.gif *.bmp *.avif` (the glob only
+  filters watching; rendering trusts the sniffed format).
+- **Rebuild required** (`vibe rebuild`) to bake the lib and the new viewer.
+
 ## v0.7.2 — 2026-07-19
 
 - **New: `vibe status` / `vibe down`.** Host-side container lifecycle without

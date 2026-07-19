@@ -204,8 +204,9 @@ case "$command_name" in
     exec "${cli[@]}" exec --workspace-folder "$repo_root" "$@"
     ;;
   show)
-    # Preview an image (default: newest `vibe clip` capture) with chafa in the
-    # invoking terminal — the agent TUI can't render images inline.
+    # Preview an image (default: newest `vibe clip` capture) in the invoking
+    # terminal — the agent TUI can't render images inline. `--diag PATH`
+    # explains a failing render instead of drawing it.
     ensure_up
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
       bash .devcontainer/harness/scripts/show-image.sh "$@"
@@ -251,6 +252,7 @@ Commands:
   exec        Run an arbitrary command in the container (no .env loading)
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
   show        Preview an image in the terminal (default: newest vibe clip capture)
+              (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  View images; with DIR (or VIBE_PREVIEW_DECISIONS set), record
               approve/reject verdicts (+ optional reject note) to JSONL
 HELP

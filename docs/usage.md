@@ -164,6 +164,7 @@ window) record verdicts. Keys, single press:
 | `y` | approve (recorded, advances) | review |
 | `n` / `x` | reject — prompts for an optional one-line note, then advances | review |
 | `r` | force re-render | both |
+| `d` | render diagnostics for the current image (format, renderer, error) | both |
 | `q` | close the window | both |
 
 Verdicts append to the JSONL decisions file (`VIBE_PREVIEW_DECISIONS`, or
@@ -192,11 +193,24 @@ template block during a [pin update](updating.md).
 Rendering notes: sixel needs a capable outer terminal (Windows Terminal
 ≥ 1.22 qualifies; tmux auto-detects — check
 `tmux display -p '#{client_termfeatures}'`); other clients degrade to
-`chafa` cell art. tmux 3.5a drops sixel images on client redraws and pane
-resizes, which is why review lives in its own window (tmux only repaints the
-active window) and the viewer re-renders on entry — `r` recovers any
-leftover glitch. Outside tmux, `chafa` probes the terminal and falls back to
-unicode blocks where sixel is unavailable.
+`chafa` cell art. Small `png`/`jpeg`/`gif`/`bmp` images render through
+`img2sixel` with **integer nearest-neighbor upscaling** — actual pixels, no
+color blending — while images larger than the pane downscale smoothly
+(lanczos3); `webp`/`avif`/`svg` always render via `chafa` (smooth only,
+`img2sixel` can't decode them), and `bmp` is the mirror case — only
+`img2sixel` decodes it, so it needs a sixel-capable terminal. The real
+format is sniffed from file
+content, never the extension — generated assets are often webp bytes named
+`.jpg`, and those now route correctly. tmux 3.5a drops sixel images on
+client redraws and pane resizes, which is why review lives in its own
+window (tmux only repaints the active window) and the viewer re-renders on
+entry plus continuously heals the image on idle ticks — `r` forces a full
+re-render. When an image won't show, press `d` in the viewer or run
+`vibe show --diag PATH`: format vs extension, native size, renderer choice,
+exit code, and the renderer's actual stderr; every render attempt also logs
+one line to the debug log (`$XDG_RUNTIME_DIR/.vibe-preview-debug.log`, or
+`/tmp/…` without XDG). Outside tmux, `chafa` probes the terminal and falls
+back to unicode blocks where sixel is unavailable.
 
 ## Troubleshooting
 

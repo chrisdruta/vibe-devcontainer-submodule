@@ -27,10 +27,21 @@ command -v jq >/dev/null 2>&1 || exit 0
 event="$(jq -r '.hook_event_name // empty' <<<"$payload")"
 case "$event" in
   UserPromptSubmit)
-    # First absolute image path mentioned in the prompt (paths with spaces
-    # won't match — fine for /tmp/clip-*.png and typical workspace paths).
+    # First absolute image path mentioned in the prompt. Extension list
+    # follows VIBE_IMAGE_EXTS in preview-lib.sh. Bare paths with spaces
+    # can't be delimited, but quoted ones ("…" or '…') are caught below.
     prompt="$(jq -r '.prompt // empty' <<<"$payload")"
-    path="$(grep -oE '/[^[:space:]"'"'"']+\.(png|jpe?g|gif|webp|bmp)' <<<"$prompt" | head -1)"
+    path="$(grep -oiE '/[^[:space:]"'"'"']+\.(png|jpe?g|gif|bmp|webp|avif)' <<<"$prompt" | head -1)"
+    if [ -z "$path" ]; then # double-quoted path (spaces survive)
+      path="$(grep -oiE '"/[^"]+\.(png|jpe?g|gif|bmp|webp|avif)"' <<<"$prompt" | head -1)"
+      path="${path%\"}"
+      path="${path#\"}"
+    fi
+    if [ -z "$path" ]; then # single-quoted path
+      path="$(grep -oiE "'/[^']+\.(png|jpe?g|gif|bmp|webp|avif)'" <<<"$prompt" | head -1)"
+      path="${path%\'}"
+      path="${path#\'}"
+    fi
     if [ -z "$path" ]; then
       case "$prompt" in
         *'[Image #'*)
@@ -47,8 +58,8 @@ case "$event" in
     ;;
   PostToolUse)
     path="$(jq -r '.tool_input.file_path // empty' <<<"$payload")"
-    case "$path" in
-      *.png | *.jpg | *.jpeg | *.gif | *.webp | *.bmp) : ;;
+    case "${path,,}" in # case-insensitive; list follows VIBE_IMAGE_EXTS
+      *.png | *.jpg | *.jpeg | *.gif | *.bmp | *.webp | *.avif) : ;;
       *) exit 0 ;;
     esac
     ;;

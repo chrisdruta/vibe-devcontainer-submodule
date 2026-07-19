@@ -20,7 +20,7 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `DEV_ENV_FILE`          | `.env`                        | File loaded by `vibe agent` / `vibe run` / `env-run.sh` |
 | `DEV_REQUIRED_COMMANDS` | `git gh jq rg uv claude` (+preset) | Commands `vibe doctor` requires                |
 | `VIBE_PREVIEW_DIR`      | `/tmp`                        | Directory the image viewer watches (see [usage.md](usage.md)) |
-| `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.webp`   | Space-separated glob list for the watch directory  |
+| `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.gif *.bmp *.webp *.avif` | Space-separated glob list for the watch directory (filters watching only; the renderer sniffs the real format from file content) |
 | `VIBE_PREVIEW_DECISIONS`| unset (viewer is passive)     | Set to a JSONL path to enable review mode: approve/reject (+ reject note) verdicts append there. `vibe review DIR` enables it per batch without config. |
 
 ## Bootstrap behavior

@@ -37,6 +37,23 @@ for command_name in $DEV_REQUIRED_COMMANDS; do
   fi
 done
 
+# Image preview stack: chafa is the fallback renderer, img2sixel the crisp
+# nearest-neighbor pixel path (both baked into the harness image).
+for command_name in chafa img2sixel; do
+  if command -v "$command_name" >/dev/null 2>&1; then
+    check_ok "$command_name -> $(command -v "$command_name")"
+  else
+    check_miss "$command_name is not installed (image previews degrade)"
+  fi
+done
+if [[ -n "${TMUX:-}" ]]; then
+  if tmux display-message -p '#{client_termfeatures}' 2>/dev/null | grep -q sixel; then
+    check_ok "tmux client reports sixel support"
+  else
+    check_miss "no sixel in client_termfeatures (Windows Terminal >= 1.22?); previews degrade to cell art"
+  fi
+fi
+
 agent_bin="${DEV_AGENT_CMD%% *}"
 if command -v "$agent_bin" >/dev/null 2>&1; then
   check_ok "agent command is available: $DEV_AGENT_CMD"
