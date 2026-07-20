@@ -181,6 +181,23 @@ panes rather than tabs, rebinding `ctrl+tab`/`ctrl+shift+tab` themselves to
 the moveFocus pair also works — direct tab switching stays reachable via
 `ctrl+alt+<number>`.
 
+The full working set with those in place (rest are stock WT defaults):
+
+| Keys | Does |
+| ---- | ---- |
+| `Ctrl+Shift+Z` | Zoom focused pane full-tab / back *(custom, above)* |
+| `Alt+PgDn` / `Alt+PgUp` | Cycle panes in creation order *(custom, above)* |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | Next / previous tab — the `tabs`-layout toggle |
+| `Alt+arrows` | Focus pane by direction |
+| `Alt+Shift+arrows` | Resize the focused pane |
+| `Ctrl+Shift+W` | Close pane (tab when last) — safe: sessions live in tmux |
+| `Alt+Shift+D` | New split; run any `./vibe ...` in it |
+| `Ctrl+Alt+1..9` | Jump straight to tab N |
+| `Ctrl+Shift+P` | Command palette (every action, bound or not) |
+
+Inside an agent pane, tmux still answers `Ctrl+B D` — detach, agent keeps
+running (same effect as closing the pane).
+
 Anywhere without `wt.exe` (macOS, WSL without Windows Terminal) it prints the
 per-pane commands instead — that fallback is the intended degraded mode, not
 an error. Layouts are hardcoded for now; config-driven layouts are on the
