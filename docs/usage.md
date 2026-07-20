@@ -219,8 +219,6 @@ file content, never the extension.
   (see [configuration.md](configuration.md)).
 - **Agent asks to log in again after a rebuild** — the state volume persists
   across rebuilds but is per project folder name; see [agent-state.md](agent-state.md).
-- **Rotated `GH_TOKEN` on the host not visible in the container** — container
-  environment is baked at create time; `vibe down && vibe up` re-reads it.
 - **Slow file operations on macOS** — Docker Desktop bind mounts (virtiofs) are
   slower than WSL's native ext4; if a heavy directory (e.g. `node_modules`) hurts,
   move it to a named volume in the project's `compose.yaml`.

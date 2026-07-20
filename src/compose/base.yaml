@@ -78,10 +78,10 @@ services:
       CODEX_HOME: /home/vscode/.agents/codex
       GH_CONFIG_DIR: /home/vscode/.agents/gh
       DISABLE_AUTOUPDATER: "1"
-      # Container env is baked at create time (the old remoteEnv was
-      # re-read per exec): after rotating a host GH_TOKEN, `vibe down`
-      # then `vibe up` picks up the new value.
-      GH_TOKEN: ${GH_TOKEN:-}
+      # No credentials here: GitHub auth is `gh auth login` inside the
+      # container, persisted in the agent-state volume (GH_CONFIG_DIR).
+      # Container env is baked at create time and visible to every process,
+      # so it is the wrong place for tokens.
 
     labels:
       # Discovery label for vibe status/down/container_running — replaces

@@ -78,19 +78,18 @@ project folder, which does not change).
 
 ```bash
 # 0. From the project root, with the pin already moved to the new release
-#    (vibe update works on the old layout).
+#    (vibe update works on the old layout; any ref works — fetch and
+#    checkout it inside the submodule, tags are just the usual targets).
 
-# 1. Stop the devcontainer-CLI-era container (new vibe can also do this later
-#    — its down/status match the old container's label too).
-docker rm -f "$(docker ps -aq --filter "label=devcontainer.local_folder=$PWD")"
-
-# 2. Rename the directory; git mv keeps history and updates .gitmodules.
+# 1. Rename the directory; git mv keeps history and updates .gitmodules.
 git mv .devcontainer .vibe
 
-# 3. Replace devcontainer.json with the compose override. Seed from the
-#    template and port over your customizations (build args, mounts, ports):
-cp .vibe/harness/src/templates/compose.yaml .vibe/compose.yaml
+# 2. Replace devcontainer.json with the compose override. Seed from the
+#    pre-rendered preset matching your project — the raw template in
+#    src/templates/ carries @PLACEHOLDER@s that only install.sh renders:
+cp .vibe/harness/examples/minimal/compose.yaml .vibe/compose.yaml   # or python/bun/roblox
 git rm .vibe/devcontainer.json
+#    Then port over your customizations:
 #    - build.args: copy your INSTALL_* / BASE_IMAGE values in — under
 #      services.base.build.args (the base service builds the shared image;
 #      dev runs it)
@@ -101,15 +100,26 @@ git rm .vibe/devcontainer.json
 #      Dockerfile to .vibe/Dockerfile (+ INSTALL_NODE in base args) —
 #      see docs/extending.md
 
-# 4. Refresh the wrapper, link the root entry point, fix hook paths:
+# 3. Refresh the seeded files whose contents the engine swap rewrote — the
+#    wrapper and the agent instructions both reference retired paths, so
+#    stale copies actively mislead agents (merge first if you customized):
 cp .vibe/harness/src/templates/vibe .vibe/vibe
-ln -s .vibe/vibe vibe && git add vibe
-sed -i 's|\.devcontainer/harness/scripts|.vibe/harness/src/scripts|g' .claude/settings.json
+cp .vibe/harness/src/templates/agents.md .vibe/AGENTS.md
+#    (config.env keeps working as-is; refresh comments from
+#     examples/<preset>/config.env if you want them current)
+
+# 4. Link the root entry point (skip if you have a real ./vibe file) and
+#    fix hook paths (sed -i.bak form works on both GNU and macOS sed):
+[ -e vibe ] || { ln -s .vibe/vibe vibe && git add vibe; }
+sed -i.bak 's|\.devcontainer/harness/scripts|.vibe/harness/src/scripts|g' \
+  .claude/settings.json && rm .claude/settings.json.bak
 #    (also update any @.devcontainer/AGENTS.md import in CLAUDE.md/AGENTS.md,
 #     and paths in project/ hooks or CI that mention .devcontainer/)
 
-# 5. Bring it up on the new engine and verify:
-./vibe up && ./vibe doctor
+# 5. Retire the devcontainer-CLI-era container, then bring the new engine
+#    up. Down FIRST — vibe down matches the old container's label too, and
+#    skipping it leaves two containers sharing the workspace:
+./vibe down && ./vibe up && ./vibe doctor
 
 # 6. Commit everything together.
 git add -A && git status   # review, then commit
@@ -173,6 +183,14 @@ Review the diff before pushing — the seeded files are project-owned, and the
 agent is instructed to prefer your values over the templates on conflict.
 
 ## Older migrations
+
+**Crossing the `GH_TOKEN` passthrough removal (2026-07, pre-v1.0):** the
+harness no longer forwards a host `GH_TOKEN` into the container environment.
+The first container recreate after this pin move drops it; GitHub auth is
+`gh auth login` inside the container (a fine-grained PAT pasted once — it
+persists in the agent-state volume). If you keep a PAT in `.env` for
+reference, store it under a neutral name, never `GH_TOKEN`/`GITHUB_TOKEN` —
+see [configuration.md](configuration.md#fine-grained-pat-quick-reference).
 
 **Crossing the v0.4.0 rename (pre-v0.4.0 installs):** the launcher was
 renamed `dev` → `vibe` in v0.4.0 and the back-compat shim dropped in v0.5.0.

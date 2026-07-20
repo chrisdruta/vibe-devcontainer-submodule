@@ -33,6 +33,13 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.gif *.bmp *.webp *.avif` | Space-separated glob list for that search (search filter only; the renderer sniffs the real format from file content) |
 | `VIBE_REVIEW_DECISIONS` | unset                         | Send all `vibe-verdict` output to one fixed JSONL path instead of `.review-decisions.jsonl` beside the reviewed images. The review keybindings themselves live in project-owned `.vibe/yazi/` (see [usage.md](usage.md)). |
 
+`DEV_AGENT_CMD` is split on spaces (no shell quoting) — fine for
+`codex --model o4` but not for arguments containing spaces or env-var
+wrappers. The escape hatch is a project script:
+`DEV_AGENT_CMD=.vibe/project/run-my-agent.sh` runs whatever the script
+execs, with full shell expressiveness inside the script instead of in
+`config.env`.
+
 ## Bootstrap behavior
 
 `post-create.sh` (also rerunnable as `vibe bootstrap`) detects manifests in the
@@ -182,11 +189,19 @@ credentials). Grant it for interactive work on repos whose CI you edit; leave
 it off for unattended runs and low-trust projects, where a rejected
 workflow-file push is the guardrail working.
 
-Alternative: `GH_TOKEN` is forwarded from the host environment into the
-container at **create** time (never baked into the image; rotate = `vibe down
-&& vibe up`). Note the trade: a host-level token is one token for **every**
-project's container, and while it is set `gh auth login` refuses to run —
-unset it on the host to use per-project logins.
+`gh auth login` (paste the PAT when prompted) is the **only** supported path —
+the login persists in the per-project state volume, so it is a one-time step
+per project. There is deliberately no `GH_TOKEN` passthrough from the host:
+container env is baked at create time and visible to every process, which is
+exactly what the explicit-secret-loading rule exists to avoid (removed
+2026-07; rotation is just `gh auth login` again).
+
+If you keep a reference copy of the PAT in the project `.env`, store it under
+a **neutral name** (e.g. `GITHUB_PAT=...`), never `GH_TOKEN` or
+`GITHUB_TOKEN`: `gh` gives those env vars precedence over the stored login,
+and `vibe agent` / `vibe run` source `.env` into the process — so the stock
+names would silently override your `gh auth login` identity in every agent
+session (and `gh auth login` refuses to run while they are set).
 
 ## Ports and host networking
 

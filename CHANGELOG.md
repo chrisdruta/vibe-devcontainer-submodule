@@ -5,6 +5,27 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **BREAKING: the host `GH_TOKEN` passthrough is gone.** The base compose
+  no longer forwards `GH_TOKEN` into the container environment — container
+  env is baked at create time and visible to every process, the wrong
+  place for a credential. GitHub auth is `gh auth login` inside the
+  container (fine-grained PAT pasted once; persists in the agent-state
+  volume). If you keep a reference PAT in `.env`, use a neutral name —
+  `GH_TOKEN`/`GITHUB_TOKEN` there would override the stored login in every
+  `vibe agent`/`vibe run` process (docs/configuration.md). Crossing note
+  in docs/updating.md.
+- The compose-migration guide in docs/updating.md got fixes earned by
+  dogfooding it: seed `.vibe/compose.yaml` from the pre-rendered
+  `examples/<preset>/` (the raw template's `@PLACEHOLDER@`s only
+  install.sh renders), reseed `.vibe/AGENTS.md` (the old seeded copy
+  gives agents retired instructions), guard the root symlink against an
+  existing real `vibe` file, macOS-safe `sed -i.bak`, and `./vibe down`
+  before the first `./vibe up` (dual-container hazard).
+- BACKLOG.md now carries the post-review direction: `vibe open` (host
+  terminal-layout adapter, Windows Terminal first) is the first feature
+  after v1.0, worktree productization follows, the repository rename is
+  scheduled pre-v1.0, and decision records reject the session-backend
+  abstraction and defer version-lock machinery.
 - **BREAKING: the devcontainer engine is gone — `vibe` drives docker
   compose + docker exec directly.** Host requirements drop to git + docker
   (no Node, no `@devcontainers/cli`, no npx fallback). The container is
@@ -38,8 +59,8 @@ Consumers pin a commit; tags mark intentional upgrade points
     lists (the harness no longer involves VS Code; WSL Remote/local
     editing work as before), the `features/` directory — playwright-deps
     is now the `INSTALL_PLAYWRIGHT_DEPS` build arg (+ optional
-    `PLAYWRIGHT_VERSION` pin), `GH_TOKEN` re-read-per-exec (container env
-    is baked at create; rotate = `vibe down && vibe up`), and the
+    `PLAYWRIGHT_VERSION` pin), the `GH_TOKEN` passthrough (removed
+    entirely — dedicated entry below), and the
     `DEVCONTAINER_CLI_SPEC` override.
   - CI's image-build job uses `./vibe build` (compose) instead of
     installing the devcontainer CLI.

@@ -26,7 +26,8 @@ Root maintenance remains possible from the host: `docker exec -u root -it <c> ba
 
 - **The repository itself.** The agent has full write access to the workspace —
   including `.git`. Anything valuable in the repo is exposed to whatever runs inside.
-- **Credentials you pass in.** `GH_TOKEN` (forwarded at container create) and any keys in `.env`
+- **Credentials you load in.** The persisted `gh auth login` in the state
+  volume and any keys `.env` loads via `vibe agent` / `vibe run`
   are readable by the agent and by any project code the bootstrap executes
   (`npm ci` postinstall scripts, `uv sync` build hooks, etc.). The seeded
   `.claude/settings.json` denies Claude Code direct reads of `./.env*` — a
@@ -62,8 +63,8 @@ A dedicated reduced-trust profile is planned but **not implemented**. Until then
 for long unattended agent tasks:
 
 - work in a disposable clone or git worktree on a dedicated branch,
-- provide no push-capable token and no cloud credentials (omit `GH_TOKEN` or use a
-  minimum-permission fine-grained token),
+- provide no push-capable credentials: `gh auth login` with a minimum-permission
+  fine-grained PAT, or don't log in at all,
 - review and push from the trusted host side.
 
 ## Supply-chain notes
