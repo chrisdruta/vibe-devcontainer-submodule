@@ -1,11 +1,11 @@
 {
   "statusLine": {
     "type": "command",
-    "command": "bash \"${CLAUDE_PROJECT_DIR}/.devcontainer/harness/scripts/statusline.sh\""
+    "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/statusline.sh\""
   },
   "subagentStatusLine": {
     "type": "command",
-    "command": "bash \"${CLAUDE_PROJECT_DIR}/.devcontainer/harness/scripts/subagent-statusline.sh\""
+    "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/subagent-statusline.sh\""
   },
   "permissions": {
     "deny": [
@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.devcontainer/harness/scripts/preview-image-hook.sh\""
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/preview-image-hook.sh\""
           }
         ]
       }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"${CLAUDE_PROJECT_DIR}/.devcontainer/harness/scripts/preview-image-hook.sh\""
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/preview-image-hook.sh\""
           }
         ]
       }

@@ -14,9 +14,8 @@ done
 here="$(cd -- "$(dirname -- "$self_path")" && pwd)"
 
 if [[ ! -x "$here/harness/vibe" ]]; then
-  echo "Harness launcher not found at .devcontainer/harness/vibe" >&2
+  echo "Harness launcher not found at $here/harness/vibe" >&2
   echo "Missing submodule? Run: git submodule update --init" >&2
-  echo "Pin older than v0.4.0? Update it: see harness docs/updating.md" >&2
   exit 1
 fi
 
