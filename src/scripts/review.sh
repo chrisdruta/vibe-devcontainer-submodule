@@ -139,5 +139,13 @@ case "${1:-}" in
 esac
 
 # Interactive: vibe review [DIR] — yazi straight in the invoking terminal.
+# Register as the live reviewer so the Claude hook can toast agent images
+# here (ya pub-to; no cursor moves — g i jumps on demand). `exec` keeps our
+# PID, so $$ IS yazi's pid: the hook's liveness check is a /proc lookup, and
+# a stale file simply fails it (hook falls back to the tmux preview window).
+# Last-launched reviewer wins.
 resolve_config_home
-exec yazi "$@"
+reviewer_id="$(client_id_for "$$")"
+printf '%s %s\n' "$$" "$reviewer_id" \
+  >"${XDG_RUNTIME_DIR:-/tmp}/.vibe-reviewer-$(id -u)" 2>/dev/null || true
+exec yazi --client-id "$reviewer_id" "$@"

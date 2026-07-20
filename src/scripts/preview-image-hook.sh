@@ -6,11 +6,19 @@
 #     `vibe clip`) queues into the viewer the moment you submit;
 #   PostToolUse (matcher: Read) — whenever the agent reads an image file,
 #     you can see what it sees.
-# The TUI itself can't render images (upstream: not planned). So: ensure the
-# dedicated "preview" tmux window exists (detached, never steals focus)
-# running yazi, then tell that yazi to reveal the path over DDS
-# (`ya emit-to <id> reveal PATH`) — it renders when its window is active,
-# otherwise the window name lights up in the status bar.
+# The TUI itself can't render images (upstream: not planned). Delivery, in
+# order:
+#   1. A live interactive reviewer (`vibe review`, registered in
+#      .vibe-reviewer-<uid> — typically a native terminal pane): publish the
+#      path over DDS (`ya pub-to <id> vibe-reveal --str PATH`). The vibe
+#      plugin toasts and remembers it; `g i` jumps on demand. Deliberately
+#      NO reveal — an auto cursor/cwd jump under someone actively browsing
+#      was judged worse than a toast.
+#   2. Fallback (tmux only): ensure the dedicated "preview" tmux window
+#      exists (detached, never steals focus) running yazi, then
+#      `ya emit-to <id> reveal PATH` — auto-reveal is right THERE, it's a
+#      display surface nobody browses; the window name lights up in the
+#      status bar until visited.
 #
 # Hook contract: JSON on stdin; stdout must stay EMPTY (UserPromptSubmit
 # stdout is injected into the model's context). Always exit 0 — a preview
@@ -28,7 +36,6 @@ img_exts="$(sed -n 's/^VIBE_IMAGE_EXTS="\([^"]*\)".*/\1/p' "$script_dir/preview-
 img_alt="$(printf '%s' "$img_exts" | tr ' ' '|')" # png|jpg|jpeg|...
 
 payload="$(cat)"
-[ -n "${TMUX:-}" ] || exit 0
 command -v jq >/dev/null 2>&1 || exit 0
 # No yazi/ya yet = image predates this pin (rebuild pending): stay a cheap
 # no-op instead of spinning up a doomed window and burning retry sleeps on
@@ -77,6 +84,21 @@ case "$event" in
 esac
 [ -n "$path" ] && [ -f "$path" ] || exit 0
 
+# Delivery 1: live interactive reviewer. review.sh execs yazi keeping its
+# PID, so the registry's pid doubles as the liveness check (/proc + comm —
+# container-side is always Linux); a recycled or dead pid fails it and we
+# fall through. pub-to returns nonzero when nothing listens on that id.
+reviewer_reg="${XDG_RUNTIME_DIR:-/tmp}/.vibe-reviewer-$(id -u)"
+if [ -r "$reviewer_reg" ]; then
+  read -r r_pid r_id <"$reviewer_reg" 2>/dev/null || r_pid=""
+  if [ -n "${r_pid:-}" ] && [ -n "${r_id:-}" ] &&
+    grep -qx yazi "/proc/$r_pid/comm" 2>/dev/null; then
+    ya pub-to "$r_id" vibe-reveal --str "$path" >/dev/null 2>&1 && exit 0
+  fi
+fi
+
+# Delivery 2: the tmux preview window (needs a tmux to put it in).
+[ -n "${TMUX:-}" ] || exit 0
 session="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_id}' 2>/dev/null)" || exit 0
 [ -n "$session" ] || exit 0
 created="$(bash "$script_dir/review.sh" --ensure "$session" 2>/dev/null)" || exit 0

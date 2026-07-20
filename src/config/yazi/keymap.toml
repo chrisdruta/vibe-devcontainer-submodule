@@ -10,3 +10,8 @@ desc = "Approve hovered file (vibe review)"
 on = "R"
 run = "plugin vibe -- reject"
 desc = "Reject hovered file, optional note (vibe review)"
+
+[[mgr.prepend_keymap]]
+on = ["g", "i"]
+run = "plugin vibe -- goto-last"
+desc = "Jump to the last agent image (vibe review)"

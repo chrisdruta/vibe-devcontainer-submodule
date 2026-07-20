@@ -5,6 +5,16 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Image hooks retargeted: agent images reach the reviewer you actually
+  watch.** The Claude Code hook now delivers to a live `vibe review`
+  first — `review.sh` registers its yazi (pid + DDS id; `exec` keeps the
+  pid, so liveness is a `/proc` check) and the vibe plugin subscribes to
+  a `vibe-reveal` DDS kind. Delivery there is a toast plus a remembered
+  path with a new `g i` keybind to jump on demand — deliberately no
+  auto-reveal, so nothing yanks the cursor/cwd while you browse. The
+  tmux `preview` window remains the fallback (no live reviewer) with its
+  auto-reveal behavior unchanged; the hook also no longer requires tmux
+  when a reviewer is up (works with `DEV_AGENT_TMUX=0`).
 - **New: `vibe open [LAYOUT]` — the workspace as native terminal panes.**
   Windows Terminal adapter (prototype): `default` opens agent (70%) |
   shell/review, `agents` opens claude | codex, `tabs` gives the agent a

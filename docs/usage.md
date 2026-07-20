@@ -279,13 +279,22 @@ pipelines (concept art → angle sheets → renders), give each batch its own
 directory and run `vibe review <dir>` per gate. The raw helper is also
 scriptable: `vibe-verdict reject PATH note words…`.
 
-Claude Code sessions feed the preview window automatically: hooks in the
+Claude Code sessions feed your reviewer automatically: hooks in the
 seeded `.claude/settings.json` (from `src/templates/claude-settings.json`) fire
 when you submit a prompt containing an image path and whenever the agent
-`Read`s an image file. The hook ensures the `preview` window exists and
-tells its yazi to reveal the image over DDS (`ya emit-to`); if the window
-isn't focused, its name lights up in the status bar instead of anything
-stealing your screen. When Claude Code converts a pasted path into an
+`Read`s an image file. Delivery targets, in order:
+
+1. **A live `vibe review`** (most recently launched — e.g. your native
+   review pane from `vibe open`): the image path arrives over DDS as a
+   toast — "Agent image: … — `g i` jumps to it". Deliberately no
+   auto-reveal: nothing moves your cursor or cwd while you're browsing;
+   `g i` jumps to the last agent image only when you ask.
+2. **The tmux `preview` window** (no reviewer open, agent inside tmux):
+   the hook ensures the detached window exists and auto-reveals the image
+   there (`ya emit-to`) — fine to jump, nobody browses that surface; its
+   name lights up in the status bar until visited (`prefix+i` to look).
+
+When Claude Code converts a pasted path into an
 `[Image #N]` *attachment* the path never reaches the hook (the payload only
 carries the placeholder), so the hook falls back to the newest
 `/tmp/clip-*.png` captured in the last 10 minutes — right for the

@@ -13,6 +13,12 @@ local M = {}
 local verdicts = {}
 local loaded_dirs = {}
 
+-- Last image the agent touched (set by the Claude hook over DDS, see
+-- setup's vibe-reveal subscription). Deliberately NOT auto-revealed: a
+-- reveal moves the cursor/cwd under whoever is browsing, so the contract
+-- here is toast-only; `g i` (keymap.toml) jumps on demand.
+local last_reveal = nil
+
 -- The repaint entry point moved across yazi versions (ya.render → ui.render,
 -- sync context only); without one the badge still appears on the next UI event.
 local function refresh()
@@ -65,6 +71,20 @@ local load_existing = ya.sync(function(_, cwd)
 	load_existing_sync(cwd)
 end)
 
+local get_last_reveal = ya.sync(function()
+	return last_reveal
+end)
+
+-- Command dispatch moved across yazi versions like the repaint entry point
+-- (ya.manager_emit → ya.emit); resolve at call time so the plugin survives
+-- a pin bump in either direction.
+local function emit_cmd(cmd, args)
+	local fn = ya.emit or ya.mgr_emit or ya.manager_emit
+	if fn then
+		fn(cmd, args)
+	end
+end
+
 function M:setup()
 	-- ✓/✗ badge column; yazi.toml selects it with `linemode = "verdict"`.
 	function Linemode:verdict()
@@ -83,10 +103,37 @@ function M:setup()
 	ps.sub("cd", function()
 		pcall(load_existing_sync, tostring(cx.active.current.cwd))
 	end)
+
+	-- The Claude hook publishes agent-touched image paths here
+	-- (`ya pub-to <id> vibe-reveal --str PATH`, preview-image-hook.sh).
+	-- Toast + remember only — never move the cursor under the reviewer.
+	ps.sub_remote("vibe-reveal", function(body)
+		local path = tostring(body or "")
+		if path == "" then
+			return
+		end
+		last_reveal = path
+		local name = path:match("[^/]+$") or path
+		ya.notify {
+			title = "vibe review",
+			content = "Agent image: " .. name .. " — g i jumps to it",
+			timeout = 4,
+		}
+		refresh()
+	end)
 end
 
 function M:entry(job)
 	local action = job.args[1]
+	if action == "goto-last" then
+		local path = get_last_reveal()
+		if not path then
+			ya.notify { title = "vibe review", content = "No agent image yet", timeout = 2 }
+			return
+		end
+		emit_cmd("reveal", { path })
+		return
+	end
 	if action ~= "approve" and action ~= "reject" then
 		return
 	end
