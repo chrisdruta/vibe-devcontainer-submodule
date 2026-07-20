@@ -7,16 +7,19 @@
 
 services:
   # The shared harness image (build-only recipe; the dev container runs it).
+  # One line per toggle — flip to "true"/"false" and `vibe rebuild`.
   base:
     build:
       args:
         BASE_IMAGE: mcr.microsoft.com/devcontainers/base:debian
+        # Agent CLIs (Claude Code is the default agent; the rest opt in):
+        INSTALL_CLAUDE_CODE: "true"
+        INSTALL_CODEX: "false" # "true" also installs Node (npm-distributed CLI)
+        INSTALL_GROK: "false"
+        # Toolchains:
+        INSTALL_NODE: "false"
         INSTALL_BUN: "false"
         INSTALL_ROKIT: "false"
-        # More toggles (defaults live in the harness base):
-        # INSTALL_CODEX: "true"
-        # INSTALL_GROK: "true"
-        # INSTALL_NODE: "true"
 
   # Dev-container deltas. Uncomment the whole block (comments may stay);
   # everything not set here comes from the harness base.

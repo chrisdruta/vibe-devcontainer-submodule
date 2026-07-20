@@ -32,7 +32,7 @@ The installer:
 
 1. seeds the project-owned files (`compose.yaml`, `config.env`, `vibe` wrapper,
    `AGENTS.md`, `project/` hooks, `yazi/` review preferences) rendered for the
-   chosen preset — selected extras get their build args enabled in the seeded
+   chosen preset — selected extras get their build args set to `"true"` in the seeded
    `compose.yaml` — plus `.claude/settings.json` (statusline, image-preview
    hooks, sudo/`.env`-read deny) unless the project already has one,
 2. links `./vibe -> .vibe/vibe` at the repository root,

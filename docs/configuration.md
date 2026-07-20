@@ -89,12 +89,18 @@ services:
     build:
       args:
         BASE_IMAGE: mcr.microsoft.com/devcontainers/base:debian
-        INSTALL_CODEX: "false"   # OpenAI Codex CLI (pulls in Node; also bundles the Codex plugin for Claude Code)
-        INSTALL_GROK: "false"    # xAI Grok Build
+        INSTALL_CLAUDE_CODE: "true"  # the default agent
+        INSTALL_CODEX: "false"   # OpenAI Codex CLI — "true" also installs Node
+                                 # (npm-distributed; bundles the Codex plugin for Claude Code)
+        INSTALL_GROK: "false"    # xAI Grok Build (standalone binary, no Node)
         INSTALL_NODE: "false"
         INSTALL_BUN: "false"
         INSTALL_ROKIT: "false"
 ```
+
+The seeded `compose.yaml` carries every toggle as a live line at its
+current value — flip and `vibe rebuild`. Each toggle is its own cached
+Docker layer, so a flip rebuilds only from that layer down.
 
 `BASE_IMAGE` accepts any image satisfying the base-image contract
 (Debian-family apt, a `vscode` user, amd64+arm64) — see

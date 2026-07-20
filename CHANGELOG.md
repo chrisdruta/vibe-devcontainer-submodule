@@ -5,6 +5,16 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Seeded compose: every `INSTALL_*` toggle is now a live rendered line.**
+  The template previously mixed three mechanisms — bun/rokit rendered,
+  codex/grok/node as commented lines install.sh sed-uncommented, playwright
+  as a seeded extension. Now all seven toggles (including the previously
+  implicit `INSTALL_CLAUDE_CODE: "true"`) render with their actual values;
+  flipping one is edit-in-place + `vibe rebuild`. The codex⇒Node implication
+  is noted inline (the Dockerfile auto-installs Node for the npm-distributed
+  Codex CLI — `INSTALL_CODEX: "true"` alone always worked). `enable_arg`
+  (the comment-uncommenting sed) is gone; extras set render values instead.
+  Existing seeded files keep working — this changes what NEW installs seed.
 - **Image hooks retargeted: agent images reach the reviewer you actually
   watch.** The Claude Code hook now delivers to a live `vibe review`
   first — `review.sh` registers its yazi (pid + DDS id; `exec` keeps the

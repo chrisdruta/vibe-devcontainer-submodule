@@ -15,10 +15,16 @@ render_preset() {
     install_rokit="$5" extra_commands="$6" out f
   out="$examples_dir/$preset"
   mkdir -p "$out"
+  # Claude/codex/grok/node are install-time extras, never preset deltas —
+  # examples always render them at the harness defaults.
   for f in compose.yaml config.env; do
     sed \
       -e "s|@PRESET_NAME@|$preset_name|" \
       -e "s|@BASE_IMAGE@|$base_image|" \
+      -e "s|@INSTALL_CLAUDE_CODE@|true|" \
+      -e "s|@INSTALL_CODEX@|false|" \
+      -e "s|@INSTALL_GROK@|false|" \
+      -e "s|@INSTALL_NODE@|false|" \
       -e "s|@INSTALL_BUN@|$install_bun|" \
       -e "s|@INSTALL_ROKIT@|$install_rokit|" \
       -e "s|@EXTRA_COMMANDS@|$extra_commands|" \

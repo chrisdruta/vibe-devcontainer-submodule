@@ -130,6 +130,10 @@ grep -q ' bun"' "$tmp/bun-project/.vibe/config.env"
 grep -q 'INSTALL_ROKIT: "true"' "$tmp/roblox-project/.vibe/compose.yaml"
 grep -q 'devcontainers/python:3.14' "$tmp/python-project/.vibe/compose.yaml"
 grep -q 'devcontainers/base:debian' "$tmp/minimal-project/.vibe/compose.yaml"
+# Every toggle renders as a live line at its default when no extra selects it.
+grep -q 'INSTALL_CLAUDE_CODE: "true"' "$tmp/minimal-project/.vibe/compose.yaml"
+grep -q 'INSTALL_CODEX: "false"' "$tmp/minimal-project/.vibe/compose.yaml"
+grep -q 'INSTALL_GROK: "false"' "$tmp/minimal-project/.vibe/compose.yaml"
 
 # --force reinstall over an existing setup must back up and succeed, and must
 # never touch an existing .claude/settings.json or the root vibe symlink.
@@ -151,7 +155,7 @@ git -C "$target" -c user.name=verify -c user.email=verify@localhost \
   commit -q --allow-empty -m init
 git -C "$target" -c protocol.file.allow=always \
   submodule add --quiet -- "$repo_root" .vibe/harness
-"$target/.vibe/harness/install.sh" --preset minimal --extras playwright >/dev/null
+"$target/.vibe/harness/install.sh" --preset minimal --extras codex,playwright >/dev/null
 [[ -f "$target/.vibe/compose.yaml" ]]
 [[ -L "$target/vibe" ]]
 # playwright is an image extension now: Dockerfile + dockerignore seeded
@@ -159,6 +163,7 @@ git -C "$target" -c protocol.file.allow=always \
 diff -q "$repo_root/src/templates/extensions/playwright/Dockerfile" "$target/.vibe/Dockerfile" >/dev/null
 diff -q "$repo_root/src/templates/extensions/dockerignore" "$target/.vibe/.dockerignore" >/dev/null
 grep -q '^        INSTALL_NODE: "true"' "$target/.vibe/compose.yaml"   # implied by playwright
+grep -q '^        INSTALL_CODEX: "true"' "$target/.vibe/compose.yaml"  # value-set by --extras codex
 # shellcheck disable=SC2016  # ${VIBE_PROJECT_NAME} is literal file content
 grep -q '^        VIBE_BASE_IMAGE: ${VIBE_PROJECT_NAME}-base' "$target/.vibe/compose.yaml"
 # shellcheck disable=SC2016  # ${VIBE_PROJECT_NAME} is literal file content

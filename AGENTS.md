@@ -68,6 +68,7 @@ consuming project — bias toward small, reviewable, backward-compatible commits
 - If touching `src/templates/` or `install.sh`, check every preset delta in
   `install.sh` (mirrored in `examples/render.sh` — verify.sh diffs the rendered
   `examples/` against real installs) and the placeholder set (`@PRESET_NAME@`, `@BASE_IMAGE@`,
+  `@INSTALL_CLAUDE_CODE@`, `@INSTALL_CODEX@`, `@INSTALL_GROK@`, `@INSTALL_NODE@`,
   `@INSTALL_BUN@`, `@INSTALL_ROKIT@`, `@EXTRA_COMMANDS@`).
 - `install.sh` must not depend on tools absent from a stock WSL Ubuntu host
   (no `jq`; `sed`/`python3` are acceptable).

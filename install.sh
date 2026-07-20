@@ -162,9 +162,15 @@ if [[ $args_given -eq 0 && -t 0 && -t 1 ]]; then
 fi
 
 # Preset deltas applied to the templates (compose.yaml build args + the
-# required-commands list in config.env).
+# required-commands list in config.env). Every INSTALL_* toggle renders as
+# a live line in the seeded compose.yaml — presets and extras only change
+# the values.
 preset_name=""
 base_image="mcr.microsoft.com/devcontainers/base:debian"
+install_claude_code="true"
+install_codex="false"
+install_grok="false"
+install_node="false"
 install_bun="false"
 install_rokit="false"
 extra_commands=""
@@ -269,18 +275,14 @@ render() {
   sed \
     -e "s|@PRESET_NAME@|$preset_name|" \
     -e "s|@BASE_IMAGE@|$base_image|" \
+    -e "s|@INSTALL_CLAUDE_CODE@|$install_claude_code|" \
+    -e "s|@INSTALL_CODEX@|$install_codex|" \
+    -e "s|@INSTALL_GROK@|$install_grok|" \
+    -e "s|@INSTALL_NODE@|$install_node|" \
     -e "s|@INSTALL_BUN@|$install_bun|" \
     -e "s|@INSTALL_ROKIT@|$install_rokit|" \
     -e "s|@EXTRA_COMMANDS@|$extra_commands|" \
     "$1" >"$2"
-}
-
-# Uncomment one '# KEY: "true"' toggle in the seeded compose.yaml.
-# Portable in-place edit (BSD sed has no GNU -i).
-enable_arg() {
-  sed "s|# $1: \"true\"|$1: \"true\"|" "$destination/compose.yaml" \
-    >"$destination/compose.yaml.tmp"
-  mv -- "$destination/compose.yaml.tmp" "$destination/compose.yaml"
 }
 
 # Seed an image extension: copy TEMPLATE to .vibe/Dockerfile (+ its
@@ -304,16 +306,20 @@ seed_extension() {
 YAML
 }
 
-render "$script_dir/src/templates/compose.yaml" "$destination/compose.yaml"
-render "$script_dir/src/templates/config.env" "$destination/config.env"
+# Extras flip toggle values before render; playwright additionally seeds
+# its image extension after render (it appends to the rendered file).
 for extra in $extras; do
   case "$extra" in
-    codex) enable_arg INSTALL_CODEX ;;
-    grok) enable_arg INSTALL_GROK ;;
-    node) enable_arg INSTALL_NODE ;;
-    playwright) seed_extension playwright ;;
+    codex) install_codex="true" ;;
+    grok) install_grok="true" ;;
+    node) install_node="true" ;;
   esac
 done
+render "$script_dir/src/templates/compose.yaml" "$destination/compose.yaml"
+render "$script_dir/src/templates/config.env" "$destination/config.env"
+case " $extras " in
+  *" playwright "*) seed_extension playwright ;;
+esac
 cp -- "$script_dir/src/templates/vibe" "$destination/vibe"
 cp -- "$script_dir/src/templates/agents.md" "$destination/AGENTS.md"
 cp -a -- "$script_dir/src/templates/project" "$destination/project"
