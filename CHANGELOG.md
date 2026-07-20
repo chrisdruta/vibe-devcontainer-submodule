@@ -5,6 +5,18 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Sidecar services are first-class: `vibe down` and `vibe status` are
+  compose-native.** A project service added to `.vibe/compose.yaml` (a
+  database, a cache) always STARTED with `vibe up`, but was invisible to
+  `status` and orphaned by `down` — both filtered on the `vibe.project`
+  label only the dev service carries. `down` now runs
+  `compose down --remove-orphans` (named volumes — agent state and sidecar
+  data — survive), degrading to label cleanup when the compose files don't
+  parse (a half-migrated repo can never strand containers), and still
+  removes legacy devcontainer-era containers. `status` lists every project
+  service with a SERVICE column via the compose-project label. Also fixes a
+  real bug: the old `status` passed both label filters to one `docker ps`,
+  which ANDs them — the table was always empty.
 - **Seeded compose: every `INSTALL_*` toggle is now a live rendered line.**
   The template previously mixed three mechanisms — bun/rokit rendered,
   codex/grok/node as commented lines install.sh sed-uncommented, playwright

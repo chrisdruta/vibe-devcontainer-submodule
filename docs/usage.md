@@ -13,8 +13,8 @@ thing) — or as plain `vibe` with the [global install](#global-install) below:
 | `rebuild`   | Fresh image + fresh container — required after editing `compose.yaml` or the Dockerfile |
 | `build`     | Build the image only                                                   |
 | `config`    | Print the merged compose config (harness base + project override)      |
-| `status`    | Show this project's container(s) — name, state, image, ports           |
-| `down`      | Stop & remove this project's container; named volumes (agent state) are kept — `vibe up` recreates it |
+| `status`    | Show **all** of this project's service containers — dev and any sidecars declared in `.vibe/compose.yaml` — running or stopped |
+| `down`      | Stop & remove **all** of this project's service containers (dev + sidecars) plus the project network; named volumes (agent state, sidecar data) are kept — `vibe up` recreates the rest |
 | `shell`     | Open a Bash shell in the container                                     |
 | `attach [SESSION]` | Attach (or create) a tmux session in the container — the door into a services session your `project/post-start.sh` stands up. Name: argument > `DEV_ATTACH_TMUX_SESSION` > `main` |
 | `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
@@ -326,6 +326,8 @@ file content, never the extension.
   (see [configuration.md](configuration.md)).
 - **Agent asks to log in again after a rebuild** — the state volume persists
   across rebuilds but is per project folder name; see [agent-state.md](agent-state.md).
+- **A sidecar service died** — `vibe up` restarts it (compose up is
+  idempotent; `vibe status` shows every project service, stopped ones included).
 - **Slow file operations on macOS** — Docker Desktop bind mounts (virtiofs) are
   slower than WSL's native ext4; if a heavy directory (e.g. `node_modules`) hurts,
   move it to a named volume in the project's `compose.yaml`.

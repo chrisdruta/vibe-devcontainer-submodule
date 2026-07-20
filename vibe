@@ -72,8 +72,9 @@ Commands:
   rebuild     Fresh image + fresh container (picks up compose.yaml/Dockerfile edits)
   build       Build the image only
   config      Print the merged compose config (base + project override)
-  status      Show this project's container(s)
-  down        Stop & remove this project's container (named volumes are kept)
+  status      Show all of this project's service containers (dev + sidecars)
+  down        Stop & remove all of this project's service containers — dev and
+              any sidecars in .vibe/compose.yaml (named volumes are kept)
   update [TAG]  Move the harness pin to TAG (default: newest release): fetch,
               show changelog delta + diff, checkout, stage — commit & rebuild stay yours
   shell       Open a Bash shell in the container
@@ -157,9 +158,15 @@ EOF
 }
 
 # Discovery is by label, not container name — resilient to compose naming
-# changes. The legacy filter lets status/down see (and clean up) a
-# devcontainer-CLI-era container during migration.
+# changes. Three labels, three scopes: vibe.project marks the dev container
+# (set in base.yaml), the compose-project label covers EVERY service compose
+# created for this project (dev + project sidecars — compose stamps it
+# itself), and the legacy filter lets status/down see (and clean up) a
+# devcontainer-CLI-era container during migration. Never combine two label
+# filters in one `docker ps` — docker ANDs repeated label filters, so a
+# combined call matches only containers carrying BOTH labels (i.e. nothing).
 label_filter="label=vibe.project=$repo_root"
+compose_filter="label=com.docker.compose.project=$project_name"
 legacy_filter="label=devcontainer.local_folder=$repo_root"
 
 container_id() {
@@ -232,17 +239,44 @@ case "$command_name" in
     compose --profile build config "$@"
     ;;
   status)
-    exec docker ps -a --filter "$label_filter" --filter "$legacy_filter" \
-      --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+    # All of this project's service containers (dev + sidecars), running or
+    # stopped — the compose-project label covers them without needing the
+    # compose files to parse. Legacy-era container shown separately.
+    docker ps -a --filter "$compose_filter" \
+      --format 'table {{.Names}}\t{{.Label "com.docker.compose.service"}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
+    legacy_ids="$(docker ps -aq --filter "$legacy_filter")"
+    if [[ -n "$legacy_ids" ]]; then
+      echo
+      echo "Legacy devcontainer-era container (vibe down removes it):"
+      docker ps -a --filter "$legacy_filter" \
+        --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
+    fi
+    exit 0
     ;;
   down)
-    # Stop & remove this project's container(s), current or legacy-era.
-    # Named volumes (agent state) are untouched; `vibe up` recreates.
-    ids="$(docker ps -aq --filter "$label_filter"; docker ps -aq --filter "$legacy_filter")"
+    # Compose-native teardown: every service container in this project
+    # (dev + sidecars declared in .vibe/compose.yaml), the project network,
+    # and orphans from since-removed services. Named volumes (agent state,
+    # sidecar data) are kept — `vibe up` recreates everything else.
+    ids="$(docker ps -aq --filter "$label_filter"; docker ps -aq --filter "$compose_filter")"
     ids="$(printf '%s\n' "$ids" | sort -u | grep . || true)"
-    [[ -n "$ids" ]] || { echo "No container found for $repo_root" >&2; exit 0; }
-    # shellcheck disable=SC2086  # one id per word is the point
-    exec docker rm -f $ids
+    legacy_ids="$(docker ps -aq --filter "$legacy_filter")"
+    if [[ -z "$ids" && -z "$legacy_ids" ]]; then
+      echo "No containers found for $repo_root" >&2
+      exit 0
+    fi
+    if [[ -n "$ids" ]] && ! compose down --remove-orphans; then
+      # Broken/missing compose files (half-migrated repo, syntax error):
+      # degrade to label cleanup so down never strands containers.
+      echo "compose down failed — removing containers by label instead." >&2
+      # shellcheck disable=SC2086  # one id per word is the point
+      docker rm -f $ids
+      docker network rm "${project_name}_default" >/dev/null 2>&1 || true
+    fi
+    # Devcontainer-era container predates the compose labels entirely.
+    # shellcheck disable=SC2086
+    [[ -z "$legacy_ids" ]] || docker rm -f $legacy_ids
+    exit 0
     ;;
   attach)
     ensure_up
