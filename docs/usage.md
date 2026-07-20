@@ -138,6 +138,10 @@ review pane):
                        # (best on portrait monitors — Ctrl+Tab is the toggle)
 ```
 
+Prefer one layout as *your* default? `export VIBE_OPEN_LAYOUT=tabs` in the
+host `~/.bashrc` and plain `./vibe open` opens it — an explicit argument
+still wins.
+
 Panes adopt the Windows Terminal profile named after your WSL distro
 (`WSL_DISTRO_NAME`), so your distro's color scheme and font apply — without
 `-p`, wt would render commandline panes with the *default* profile's looks

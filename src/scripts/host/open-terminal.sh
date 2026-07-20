@@ -21,7 +21,9 @@ if [ "$#" -lt 2 ]; then
 fi
 repo_root="$1"
 ws_base="$2"
-layout="${3:-default}"
+# No-argument default is personal, not universal: VIBE_OPEN_LAYOUT on the
+# host (e.g. tabs for a portrait monitor) — an explicit argument still wins.
+layout="${3:-${VIBE_OPEN_LAYOUT:-default}}"
 
 # Pane command lines per layout, one string per pane (word-split when the
 # fallback prints them; the wt path re-lists them as argv below to keep

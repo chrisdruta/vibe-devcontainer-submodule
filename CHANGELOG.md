@@ -16,8 +16,9 @@ Consumers pin a commit; tags mark intentional upgrade points
   schemes survive (`VIBE_OPEN_PROFILE` overrides; without `-p`, wt paints
   commandline panes with the default profile's looks). Without `wt.exe` it
   prints the per-pane commands — the intended degraded mode and the macOS
-  story for now. Layouts are hardcoded; config-driven layouts are on the
-  backlog.
+  story for now. `VIBE_OPEN_LAYOUT` (host env) sets the no-argument
+  default layout; an explicit argument wins. Layouts are hardcoded;
+  config-driven layouts are on the backlog.
 - **BREAKING: the host `GH_TOKEN` passthrough is gone.** The base compose
   no longer forwards `GH_TOKEN` into the container environment — container
   env is baked at create time and visible to every process, the wrong

@@ -90,7 +90,8 @@ Commands:
   open [LAYOUT]  Open the workspace as native terminal panes (Windows Terminal;
               elsewhere it prints the per-pane commands to run manually).
               Layouts: default (agent 70% | shell/review), agents (claude |
-              codex), tabs (agent tab + extras tab — for portrait monitors)
+              codex), tabs (agent tab + extras tab — for portrait monitors).
+              No LAYOUT: $VIBE_OPEN_LAYOUT if set, else default
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with
@@ -305,7 +306,7 @@ case "$command_name" in
     # first) — the terminal owns the layout, the per-agent tmux sessions
     # keep persistence. ensure_up here so panes don't race compose up.
     ensure_up
-    exec bash "$self_dir/src/scripts/host/open-terminal.sh" "$repo_root" "$ws_base" "${1:-default}"
+    exec bash "$self_dir/src/scripts/host/open-terminal.sh" "$repo_root" "$ws_base" "${1:-}"
     ;;
   *)
     echo "Unknown command: $command_name" >&2
