@@ -6,13 +6,18 @@ Consumers pin a commit; tags mark intentional upgrade points
 ## Unreleased
 
 - **New: `vibe open [LAYOUT]` — the workspace as native terminal panes.**
-  Windows Terminal adapter (prototype): `default` opens agent | shell/review,
-  `agents` opens claude | codex; every pane runs one stable `vibe` command
-  and attaches to its own per-variant tmux session, so the terminal owns
-  layout and rendering while tmux keeps persistence (close the window,
-  lose nothing). Without `wt.exe` it prints the per-pane commands — the
-  intended degraded mode and the macOS story for now. Layouts are
-  hardcoded; config-driven layouts are on the backlog.
+  Windows Terminal adapter (prototype): `default` opens agent (70%) |
+  shell/review, `agents` opens claude | codex, `tabs` gives the agent a
+  whole tab with shell/review stacked in a second tab (portrait monitors;
+  Ctrl+Tab toggles). Every pane runs one stable `vibe` command and attaches
+  to its own per-variant tmux session, so the terminal owns layout and
+  rendering while tmux keeps persistence (close the window, lose nothing).
+  Panes adopt the WT profile named after the WSL distro so distro color
+  schemes survive (`VIBE_OPEN_PROFILE` overrides; without `-p`, wt paints
+  commandline panes with the default profile's looks). Without `wt.exe` it
+  prints the per-pane commands — the intended degraded mode and the macOS
+  story for now. Layouts are hardcoded; config-driven layouts are on the
+  backlog.
 - **BREAKING: the host `GH_TOKEN` passthrough is gone.** The base compose
   no longer forwards `GH_TOKEN` into the container environment — container
   env is baked at create time and visible to every process, the wrong

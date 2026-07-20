@@ -89,7 +89,8 @@ Commands:
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
   open [LAYOUT]  Open the workspace as native terminal panes (Windows Terminal;
               elsewhere it prints the per-pane commands to run manually).
-              Layouts: default (agent | shell/review), agents (claude | codex)
+              Layouts: default (agent 70% | shell/review), agents (claude |
+              codex), tabs (agent tab + extras tab — for portrait monitors)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with

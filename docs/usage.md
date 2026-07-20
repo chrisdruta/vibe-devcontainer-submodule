@@ -132,9 +132,22 @@ yazi talks sixel directly to the terminal, none of the tmux caveats apply.
 review pane):
 
 ```bash
-./vibe open            # agent (left) | shell / review (right column)
-./vibe open agents     # claude | codex
+./vibe open            # agent (left, 70%) | shell / review (right column)
+./vibe open agents     # claude | codex, half and half
+./vibe open tabs       # tab 1: agent full-screen; tab 2: shell / review
+                       # (best on portrait monitors — Ctrl+Tab is the toggle)
 ```
+
+Panes adopt the Windows Terminal profile named after your WSL distro
+(`WSL_DISTRO_NAME`), so your distro's color scheme and font apply — without
+`-p`, wt would render commandline panes with the *default* profile's looks
+instead. Set the host env var `VIBE_OPEN_PROFILE` to pick a different
+profile (or to empty to skip profile selection).
+
+For hiding the side panes on demand within one tab, bind Windows Terminal's
+`togglePaneZoom` action (unbound by default — Settings → Actions, or
+`{ "command": "togglePaneZoom", "keys": "ctrl+shift+z" }` in its
+settings.json): it expands the focused pane to the whole tab and back.
 
 Anywhere without `wt.exe` (macOS, WSL without Windows Terminal) it prints the
 per-pane commands instead — that fallback is the intended degraded mode, not

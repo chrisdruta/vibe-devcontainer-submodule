@@ -29,8 +29,9 @@ layout="${3:-default}"
 case "$layout" in
   default) panes=("agent" "shell" "review") ;;
   agents)  panes=("agent" "agent -a codex") ;;
+  tabs)    panes=("agent" "shell" "review") ;;
   *)
-    echo "Unknown layout: $layout (available: default, agents)" >&2
+    echo "Unknown layout: $layout (available: default, agents, tabs)" >&2
     exit 2
     ;;
 esac
@@ -55,21 +56,42 @@ if [ -n "${WSL_DISTRO_NAME:-}" ]; then
 fi
 wsl_cmd+=(--cd "$repo_root" -e ./vibe)
 
+# Pane appearance: without -p, wt renders a commandline pane with the
+# DEFAULT profile's settings (often PowerShell's) — that is how a distro
+# color scheme goes missing. WSL registers a Windows Terminal profile named
+# after the distro, so WSL_DISTRO_NAME is the right default guess;
+# VIBE_OPEN_PROFILE overrides it (set it empty to pass no -p at all).
+# The ${arr[@]+...} guard keeps empty-array expansion safe under set -u
+# on old bash.
+profile="${VIBE_OPEN_PROFILE-${WSL_DISTRO_NAME:-}}"
+wt_profile=()
+if [ -n "$profile" ]; then
+  wt_profile=(-p "$profile")
+fi
+
 # A lone ";" argv element separates wt subcommands. split-pane -V puts the
 # new pane to the right, -H below the focused pane; --size is the fraction
 # given to the NEW pane.
-wt_args=(new-tab --title "vibe: $ws_base")
+wt_args=(new-tab ${wt_profile[@]+"${wt_profile[@]}"} --title "vibe: $ws_base")
 case "$layout" in
   default)
-    # agent (left, 60%) | shell (right top) / review (right bottom)
+    # agent (left, 70%) | shell (right top) / review (right bottom)
     wt_args+=("${wsl_cmd[@]}" agent)
-    wt_args+=(";" split-pane -V --size 0.4 "${wsl_cmd[@]}" shell)
-    wt_args+=(";" split-pane -H "${wsl_cmd[@]}" review)
+    wt_args+=(";" split-pane ${wt_profile[@]+"${wt_profile[@]}"} -V --size 0.3 "${wsl_cmd[@]}" shell)
+    wt_args+=(";" split-pane ${wt_profile[@]+"${wt_profile[@]}"} -H "${wsl_cmd[@]}" review)
     ;;
   agents)
     # claude | codex, half and half
     wt_args+=("${wsl_cmd[@]}" agent)
-    wt_args+=(";" split-pane -V --size 0.5 "${wsl_cmd[@]}" agent -a codex)
+    wt_args+=(";" split-pane ${wt_profile[@]+"${wt_profile[@]}"} -V --size 0.5 "${wsl_cmd[@]}" agent -a codex)
+    ;;
+  tabs)
+    # Portrait-friendly: the agent owns the whole first tab; shell over
+    # review fills a second tab. Ctrl+Tab is the toggle; land on the agent.
+    wt_args+=("${wsl_cmd[@]}" agent)
+    wt_args+=(";" new-tab ${wt_profile[@]+"${wt_profile[@]}"} --title "vibe: $ws_base extras" "${wsl_cmd[@]}" shell)
+    wt_args+=(";" split-pane ${wt_profile[@]+"${wt_profile[@]}"} -H "${wsl_cmd[@]}" review)
+    wt_args+=(";" focus-tab -t 0)
     ;;
 esac
 
