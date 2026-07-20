@@ -87,6 +87,9 @@ Commands:
   bootstrap   Rerun create-time dependency setup
   exec        Run an arbitrary command in the container (no .env loading)
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
+  open [LAYOUT]  Open the workspace as native terminal panes (Windows Terminal;
+              elsewhere it prints the per-pane commands to run manually).
+              Layouts: default (agent | shell/review), agents (claude | codex)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with
@@ -295,6 +298,13 @@ case "$command_name" in
       ensure_up
       exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "" "$(container_id)"
     fi
+    ;;
+  open)
+    # Host-side: the workspace as native terminal panes (Windows Terminal
+    # first) — the terminal owns the layout, the per-agent tmux sessions
+    # keep persistence. ensure_up here so panes don't race compose up.
+    ensure_up
+    exec bash "$self_dir/src/scripts/host/open-terminal.sh" "$repo_root" "$ws_base" "${1:-default}"
     ;;
   *)
     echo "Unknown command: $command_name" >&2

@@ -124,6 +124,7 @@ cd ~/dev/my-project
 | `vibe clip`      | Save the host clipboard image for the container (image-paste workaround) |
 | `vibe show`      | Preview an image in the terminal (default: newest `vibe clip` capture) |
 | `vibe review [DIR]` | Browse/review images with yazi; `A` approves, `R` rejects (optional note) to `.review-decisions.jsonl` beside the images |
+| `vibe open [LAYOUT]` | Open the workspace as native terminal panes, one vibe command each (Windows Terminal; prints the commands elsewhere) |
 | `vibe config`    | Print the merged compose config (base + project override) |
 | `vibe doctor`    | Check the environment (run this first when things break)  |
 | `vibe rebuild`   | Fresh image + container after editing `compose.yaml`/Dockerfile |

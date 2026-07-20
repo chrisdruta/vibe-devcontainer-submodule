@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# Open the project workspace as native terminal panes — Windows Terminal
+# first. Each pane runs one stable `vibe` command from the repo root, so the
+# terminal owns tabs/panes/rendering while the per-agent tmux sessions inside
+# the container keep persistence: closing the terminal loses the layout, not
+# the work, and rerunning `vibe open` reattaches the same sessions.
+#
+# Invoked by `vibe open [LAYOUT]` on the host (after ensure_up, so panes
+# don't race `compose up`). Layouts are hardcoded cases below for now
+# (BACKLOG: config-driven layouts). Without wt.exe — macOS, or WSL without
+# Windows Terminal — the fallback prints the per-pane commands: any
+# terminal's split feature runs them just as well, and that IS the intended
+# degraded mode, not an error.
+set -euo pipefail
+
+if [ "$#" -lt 2 ]; then
+  echo "Usage: open-terminal.sh REPO_ROOT WS_BASE [LAYOUT]" >&2
+  echo "(normally invoked via: vibe open [LAYOUT])" >&2
+  exit 2
+fi
+repo_root="$1"
+ws_base="$2"
+layout="${3:-default}"
+
+# Pane command lines per layout, one string per pane (word-split when the
+# fallback prints them; the wt path re-lists them as argv below to keep
+# quoting exact). First pane is the new tab, the rest are splits.
+case "$layout" in
+  default) panes=("agent" "shell" "review") ;;
+  agents)  panes=("agent" "agent -a codex") ;;
+  *)
+    echo "Unknown layout: $layout (available: default, agents)" >&2
+    exit 2
+    ;;
+esac
+
+if ! command -v wt.exe >/dev/null 2>&1; then
+  echo "No wt.exe (Windows Terminal) on PATH — open panes yourself, each running"
+  echo "one of these from $repo_root:"
+  for pane in "${panes[@]}"; do
+    echo "  ./vibe $pane"
+  done
+  echo "(persistence comes from the tmux sessions inside, not from the panes)"
+  exit 0
+fi
+
+# Every pane runs `./vibe CMD` via WSL interop. Args stay separate argv all
+# the way — interop quotes them Windows-side — and `-e` execs without a
+# shell, so nothing here is parsed twice. `--cd` accepts absolute Linux
+# paths; -d pins the distro when we know it (multi-distro hosts).
+wsl_cmd=(wsl.exe)
+if [ -n "${WSL_DISTRO_NAME:-}" ]; then
+  wsl_cmd+=(-d "$WSL_DISTRO_NAME")
+fi
+wsl_cmd+=(--cd "$repo_root" -e ./vibe)
+
+# A lone ";" argv element separates wt subcommands. split-pane -V puts the
+# new pane to the right, -H below the focused pane; --size is the fraction
+# given to the NEW pane.
+wt_args=(new-tab --title "vibe: $ws_base")
+case "$layout" in
+  default)
+    # agent (left, 60%) | shell (right top) / review (right bottom)
+    wt_args+=("${wsl_cmd[@]}" agent)
+    wt_args+=(";" split-pane -V --size 0.4 "${wsl_cmd[@]}" shell)
+    wt_args+=(";" split-pane -H "${wsl_cmd[@]}" review)
+    ;;
+  agents)
+    # claude | codex, half and half
+    wt_args+=("${wsl_cmd[@]}" agent)
+    wt_args+=(";" split-pane -V --size 0.5 "${wsl_cmd[@]}" agent -a codex)
+    ;;
+esac
+
+echo "Opening Windows Terminal — layout '$layout' (${#panes[@]} panes) for $ws_base"
+exec wt.exe "${wt_args[@]}"

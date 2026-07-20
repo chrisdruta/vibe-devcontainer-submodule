@@ -26,6 +26,7 @@ thing) — or as plain `vibe` with the [global install](#global-install) below:
 | `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 | `show [PATH]` | Preview an image in the terminal via sixel (default: newest `vibe clip` capture) |
 | `review [DIR]` | Browse/review images with yazi (verdict keys, badges — below)       |
+| `open [LAYOUT]` | Open the workspace as native terminal panes, each running one vibe command (Windows Terminal; elsewhere prints the commands to run manually) |
 
 The launcher drives docker directly: `docker compose` for the container
 lifecycle (the harness base compose file with the project's
@@ -78,6 +79,9 @@ tmux
 # pane 1: claude    pane 2: codex    pane 3: grok
 ```
 
+— or skip the tmux panes and let your terminal own the layout: see
+[Native panes](#native-panes-vibe-open).
+
 ## Cold sessions (fresh perspective)
 
 `vibe agent --cold` starts the agent without the repo's instruction files, for an
@@ -104,6 +108,38 @@ composes with the per-invocation agent selector:
 With `DEV_AGENT_TMUX=1` each variant uses its own tmux session — `agent`,
 `agent-cold`, `agent-codex`, `agent-codex-cold` — so runs never reattach to the
 wrong session and can happily run side by side.
+
+## Native panes (`vibe open`)
+
+Those per-variant sessions enable a second workflow: let your **terminal** own
+the layout and keep tmux for persistence only. Each native pane runs one
+single-purpose command and attaches to its own session in the container:
+
+```bash
+# any terminal's split feature; one command per pane
+./vibe agent              # claude — session "agent"
+./vibe agent -a codex     # codex  — session "agent-codex"
+./vibe review             # yazi image review, rendered by the terminal itself
+./vibe shell              # plain shell
+```
+
+Closing the terminal (or the laptop lid) loses the layout, not the work — the
+sessions keep running in the container, and reopening the panes reattaches.
+`vibe review` in its own native pane is the best-rendered review surface:
+yazi talks sixel directly to the terminal, none of the tmux caveats apply.
+
+`vibe open` automates the layout on Windows Terminal (≥ 1.22 for sixel in the
+review pane):
+
+```bash
+./vibe open            # agent (left) | shell / review (right column)
+./vibe open agents     # claude | codex
+```
+
+Anywhere without `wt.exe` (macOS, WSL without Windows Terminal) it prints the
+per-pane commands instead — that fallback is the intended degraded mode, not
+an error. Layouts are hardcoded for now; config-driven layouts are on the
+backlog (BACKLOG.md).
 
 ## Pasting images to an agent
 
