@@ -5,6 +5,19 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **New: `vibe-svc` — the services session is real now.** The docs promised
+  "a services session your post-start hook stands up, `vibe attach` is the
+  door in" with no machinery behind it. `vibe-svc NAME COMMAND...` (baked
+  into the image; rebuild once after crossing this release) idempotently
+  runs a workspace process as window NAME in the shared services tmux
+  session — safe on every container start, logs in the scrollback, crashed
+  services restart on the next run. It deliberately does NOT load `.env`
+  (wrap with `env-run.sh` when a service needs secrets). `vibe attach`'s
+  no-argument default changes `main` → `services` so the door and the
+  populater agree (the old `main` was always empty — nothing populated it).
+  New [docs/services.md](docs/services.md) is the chooser: compose sidecars
+  for independent daemons, `vibe-svc` for workspace processes, host-program
+  patterns for the rest; the roblox Rojo example now uses it.
 - **Sidecar services are first-class: `vibe down` and `vibe status` are
   compose-native.** A project service added to `.vibe/compose.yaml` (a
   database, a cache) always STARTED with `vibe up`, but was invisible to

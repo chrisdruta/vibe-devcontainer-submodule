@@ -28,12 +28,18 @@ wally-package-types --sourcemap sourcemap.json Packages 2>/dev/null || true
 
 ## Services (Rojo)
 
-The harness never starts services. Start Rojo from the project hook or a tmux pane:
+The harness never starts project services itself — the post-start hook does,
+via `vibe-svc` (idempotent; safe on every container start —
+[services.md](services.md)):
 
 ```bash
-# .vibe/project/post-start.sh (keep idempotent)
-pgrep -f "rojo serve" >/dev/null || (rojo serve &>/tmp/rojo.log &)
+# .vibe/project/post-start.sh
+vibe-svc rojo rojo serve
 ```
+
+Rojo runs as window `rojo` in the services tmux session: `vibe attach` lands
+you in it, the serve log is the window's scrollback, and if Rojo crashes the
+window closes so the next `vibe up` (or rerunning the hook) restarts it.
 
 To reach Rojo from Roblox Studio on the Windows host, publish the port to
 loopback in `.vibe/compose.yaml`:

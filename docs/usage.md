@@ -16,7 +16,7 @@ thing) — or as plain `vibe` with the [global install](#global-install) below:
 | `status`    | Show **all** of this project's service containers — dev and any sidecars declared in `.vibe/compose.yaml` — running or stopped |
 | `down`      | Stop & remove **all** of this project's service containers (dev + sidecars) plus the project network; named volumes (agent state, sidecar data) are kept — `vibe up` recreates the rest |
 | `shell`     | Open a Bash shell in the container                                     |
-| `attach [SESSION]` | Attach (or create) a tmux session in the container — the door into a services session your `project/post-start.sh` stands up. Name: argument > `DEV_ATTACH_TMUX_SESSION` > `main` |
+| `attach [SESSION]` | Attach (or create) a tmux session in the container — the door into the services session `vibe-svc` populates from `project/post-start.sh` ([services.md](services.md)). Name: argument > `DEV_ATTACH_TMUX_SESSION` > `services` |
 | `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
 | `run CMD`   | Run any command with explicit `.env` loading (e.g. `vibe run codex`)    |
 | `exec CMD`  | Run any command **without** `.env` loading                             |

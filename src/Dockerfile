@@ -75,6 +75,7 @@ COPY config/tmux.conf /etc/tmux.conf
 COPY --chmod=0755 scripts/show-image.sh /usr/local/bin/vibe-show-image
 COPY --chmod=0755 scripts/review.sh /usr/local/bin/vibe-preview
 COPY --chmod=0755 scripts/review-verdict.sh /usr/local/bin/vibe-verdict
+COPY --chmod=0755 scripts/svc.sh /usr/local/bin/vibe-svc
 COPY --chmod=0644 scripts/preview-lib.sh /usr/local/lib/vibe/preview-lib.sh
 COPY config/yazi /usr/local/lib/vibe/yazi
 # COPY --chmod also applies to the parent directories it implicitly creates —

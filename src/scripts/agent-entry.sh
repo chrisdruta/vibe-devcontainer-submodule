@@ -21,9 +21,11 @@ shift || true
 
 case "$mode" in
   attach)
-    # Door into a long-lived services session a project's post-start hook
-    # stands up. Session name: argument > DEV_ATTACH_TMUX_SESSION > "main".
-    session="${1:-${DEV_ATTACH_TMUX_SESSION:-main}}"
+    # Door into the services session `vibe-svc` populates (one window per
+    # service, stood up by the project's post-start hook). Session name:
+    # argument > DEV_ATTACH_TMUX_SESSION > "services" — the same resolution
+    # vibe-svc uses, so the door and the populater always agree.
+    session="${1:-${DEV_ATTACH_TMUX_SESSION:-services}}"
     exec tmux -u new-session -A -s "$session"
     ;;
   agent) ;;

@@ -22,7 +22,7 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `DEV_AGENT_CMD`         | `claude`                      | What `vibe agent` runs (may include arguments)      |
 | `DEV_AGENT_TMUX`        | `1` (seeded; unset = `0`)     | `1`: `vibe agent` runs in a persistent tmux session — rerunning attaches, detaching (`Ctrl-b d`) keeps it alive |
 | `DEV_AGENT_TMUX_SESSION`| `agent`                       | tmux session name used by `vibe agent`              |
-| `DEV_ATTACH_TMUX_SESSION`| `main` (seeded commented-out) | Default session for `vibe attach` when no name is given |
+| `DEV_ATTACH_TMUX_SESSION`| `services` (seeded commented-out) | Session `vibe attach` opens with no argument, and the session `vibe-svc` populates ([services.md](services.md)) |
 | `DEV_BOOTSTRAP_STRICT`  | `1`                           | `1`: bootstrap steps fail loudly; `0`: warn and continue |
 | `DEV_AUTO_INSTALL`      | `1`                           | Enable lockfile-detected dependency installation   |
 | `DEV_AUTO_GIT_HOOKS`    | `1`                           | Wire `.githooks/` into `core.hooksPath` (see [security.md](security.md)) |
@@ -68,10 +68,12 @@ idempotent and safe to rerun.
 ```
 
 Put migrations, code generation, MCP setup, or service startup here. The harness
-itself never starts services and does not assume a process manager; long-running
-dependencies (databases, dev servers) can be compose services in the project's
-`compose.yaml`, or processes a `post-start.sh` stands up in a tmux session
-(`vibe attach` is the door in).
+itself never starts project services and does not assume a process manager;
+long-running dependencies are either compose sidecars in the project's
+`compose.yaml` (they start with `vibe up`, appear in `vibe status`, and are
+removed by `vibe down`; their named volumes survive) or workspace processes
+`post-start.sh` stands up with `vibe-svc` (`vibe attach` is the door in) —
+the full chooser is [services.md](services.md).
 
 ## The compose override (`.vibe/compose.yaml`)
 
