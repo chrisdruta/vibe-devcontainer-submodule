@@ -1,0 +1,12 @@
+# Harness review keybindings (merged with the project's keymap.toml by
+# scripts/review.sh — project entries come first, so a project can rebind
+# these). A/R are unbound in yazi's defaults: a/r keep create/rename.
+[[mgr.prepend_keymap]]
+on = "A"
+run = "plugin vibe -- approve"
+desc = "Approve hovered file (vibe review)"
+
+[[mgr.prepend_keymap]]
+on = "R"
+run = "plugin vibe -- reject"
+desc = "Reject hovered file, optional note (vibe review)"

@@ -17,6 +17,10 @@ check_miss() {
   status=1
 }
 
+check_note() { # informational: worth seeing, not a failure
+  printf 'NOTE  %s\n' "$1"
+}
+
 if [[ "$(id -u)" -ne 0 ]]; then
   check_ok "running as non-root user $(id -un)"
 else
@@ -37,13 +41,13 @@ for command_name in $DEV_REQUIRED_COMMANDS; do
   fi
 done
 
-# Image preview stack: chafa is the fallback renderer, img2sixel the crisp
-# nearest-neighbor pixel path (both baked into the harness image).
-for command_name in chafa img2sixel; do
+# Image stack: yazi drives review (file(1) is its mime dependency, ya its
+# remote control the hook uses); chafa/img2sixel render `vibe show`.
+for command_name in yazi ya file chafa img2sixel; do
   if command -v "$command_name" >/dev/null 2>&1; then
     check_ok "$command_name -> $(command -v "$command_name")"
   else
-    check_miss "$command_name is not installed (image previews degrade)"
+    check_miss "$command_name is not installed (old image? vibe rebuild)"
   fi
 done
 if [[ -n "${TMUX:-}" ]]; then
@@ -73,6 +77,16 @@ else
   check_ok "passwordless sudo is unavailable"
 fi
 
+# Repo-wired git hooks cross the container boundary: .git/config lives on the
+# shared mount, so a hooksPath set in here also fires when git runs on the
+# HOST, with real SSH keys (docs/security.md). Keep that visible every run.
+hooks_path="$(git config --local --get core.hooksPath 2>/dev/null || true)"
+if [[ -n "$hooks_path" ]]; then
+  check_note "git hooks wired: core.hooksPath -> $hooks_path — these also run on the HOST; set DEV_AUTO_GIT_HOOKS=0 before pointing at third-party code"
+else
+  check_ok "no repo-wired git hooks (core.hooksPath unset)"
+fi
+
 if [[ -f "$REPO_ROOT/$DEV_ENV_FILE" ]]; then
   check_ok "$DEV_ENV_FILE exists and is only loaded explicitly"
 else
@@ -90,6 +104,22 @@ if command -v gh >/dev/null 2>&1; then
     fi
   else
     check_ok "gh is not logged in (optional; see configuration.md -> GitHub access)"
+  fi
+fi
+
+# Harness pin freshness — offline on purpose (doctor must never hang on the
+# network): compares only against already-fetched tags; `vibe update` fetches.
+harness_dir="$REPO_ROOT/.devcontainer/harness"
+if git -C "$harness_dir" rev-parse --git-dir >/dev/null 2>&1; then
+  pin_desc="$(git -C "$harness_dir" describe --tags 2>/dev/null ||
+    git -C "$harness_dir" rev-parse --short HEAD 2>/dev/null)"
+  newest_tag="$(git -C "$harness_dir" tag --list 'v*' --sort=-v:refname 2>/dev/null | head -n 1)"
+  if [[ -z "$newest_tag" ]]; then
+    check_ok "harness pin $pin_desc (no fetched tags to compare against)"
+  elif git -C "$harness_dir" merge-base --is-ancestor "$newest_tag" HEAD >/dev/null 2>&1; then
+    check_ok "harness pin $pin_desc (up to date with fetched tag $newest_tag)"
+  else
+    check_note "harness pin $pin_desc is behind fetched tag $newest_tag — vibe update stages the move (review/commit stays yours)"
   fi
 fi
 

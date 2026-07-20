@@ -3,6 +3,80 @@
 Consumers pin a commit; tags mark intentional upgrade points
 (see [docs/updating.md](docs/updating.md)).
 
+## Unreleased
+
+- **Changed: image review is now [yazi](https://yazi-rs.github.io/).** The
+  homegrown viewer (`preview-viewer.sh`, ~500 lines of tmux/sixel handling)
+  is deleted — dogfooding judged it clunky, and yazi is the same class of
+  solution (a compiled program that owns decoding and terminal protocols)
+  maintained upstream. Pinned by version + checksum per arch in the
+  Dockerfile, with `file(1)` for mime detection. **Rebuild required.**
+  - `vibe review [DIR]` opens yazi in the invoking terminal;
+    prefix+`i` opens it as the dedicated tmux `preview` window
+    (`scripts/review.sh`, baked as `vibe-preview` — same fixed name, so old
+    tmux configs keep working).
+  - **Review is a first-party yazi plugin (`vibe.yazi`) with status**:
+    `A` approves, `R` rejects with an optional note via yazi's input box
+    (both unbound in yazi's defaults — `a`/`r` keep create/rename), each
+    confirmed by a toast, and judged files carry a persistent ✓/✗ badge
+    column (the `verdict` linemode; existing verdicts load per directory).
+    Verdicts append via the baked `vibe-verdict` helper to
+    `.review-decisions.jsonl` beside the reviewed images — a dotfile, so it
+    never steals the newest-first hover (`VIBE_REVIEW_DECISIONS` overrides
+    the target; `VIBE_PREVIEW_DECISIONS` is gone).
+  - **Config is layered**: the harness carries the machinery (plugin, review
+    keymap, badge linemode) and updates with the pin; the seeded
+    project-owned `.devcontainer/yazi/` overrides `yazi.toml`/`theme.toml`
+    wholesale, merges its `keymap.toml` entries in front (project wins on
+    conflict), and its `init.lua` runs after the harness's. Existing
+    projects adopt the seed during a pin-update reconcile; without it,
+    review still works on the harness defaults.
+  - The Claude Code hook now reveals images in the running yazi over DDS
+    (`ya emit-to`) instead of a flock-guarded queue file.
+  - tmux.conf adds `update-environment TERM`/`TERM_PROGRAM` (yazi's
+    protocol detection); `vibe show` and its img2sixel/chafa pixel-exact
+    one-shot path are unchanged.
+- **New: `vibe update [TAG]`.** The recommended update flow from
+  docs/updating.md as one command: fetch tags, print the CHANGELOG sections
+  between the two pins and the diff stat, check out the newest (or given)
+  tag, and **stage** the pin move — never commits, never rebuilds. Reports
+  whether a rebuild is required (`Dockerfile` changed) or recommended (baked
+  script/config copies changed), and flags `templates/` changes for
+  project-owned-file reconciliation. Rolling back is the same command with an
+  older tag. Works identically inside the container — agents run
+  `bash .devcontainer/harness/scripts/update.sh` (now referenced in the
+  seeded `AGENTS.md`) and hand the printed rebuild step to the host.
+- **New: `vibe doctor` reports harness pin freshness** — a non-failing `NOTE`
+  when the pin is behind the newest already-fetched tag. Offline by design:
+  doctor never touches the network; `vibe update` is what fetches.
+- **Changed: `vibe agent` / `vibe attach` logic moved container-side** into
+  `scripts/agent-entry.sh`. The launcher no longer inlines single-quoted
+  `bash -lc` payloads with positional smuggling — the entry script receives
+  real argv via `devcontainer exec`. Behavior is unchanged (`--cold`, `-a`,
+  tmux sessions, `.env`-in-pane-only all as before); the flags are now
+  parsed in-container.
+- **New: git-hook wiring is loud.** `DEV_AUTO_GIT_HOOKS` still defaults on
+  (it wires only the consuming repo's own `.githooks/`), but the boundary
+  crossing is now visible every run: doctor emits a `NOTE` whenever
+  `core.hooksPath` is set (the hooks also run host-side via the shared
+  mount — see docs/security.md), and post-create logs the wiring when it
+  does it.
+- **Changed: one repo-root walk for host tools.** The `$PWD` ancestor
+  discovery is now shared (`scripts/repo-root.sh`, sourced by `vibe` and
+  `update.sh`) instead of duplicated; `lib.sh` documents why lifecycle
+  scripts deliberately anchor differently. `verify.sh`'s bash-3.2 gate now
+  also covers `update.sh` and the new helper.
+- **Changed: the preview hook derives its image-extension regexes from
+  `VIBE_IMAGE_EXTS`** in `preview-lib.sh` (sed-extracted, never sourced —
+  hook stdout must stay empty) instead of three hardcoded copies.
+- **Docs: positioning explicitly owns the terminal affordances**
+  (`clip`/`show`/`review`) as part of "the environment"; driving agents
+  remains a non-goal. `BACKLOG.md` now carries the real roadmap: the
+  reduced-trust profile and the recorded Go-migration triggers for the
+  preview subsystem.
+- Removed the legacy `.devcontainer/dev` exec-bit self-heal (pre-v0.4.0
+  wrapper name).
+
 ## v0.7.3 — 2026-07-19
 
 - **Changed: image previews render actual pixels where possible.** Small

@@ -19,15 +19,9 @@ while [ -L "$self_path" ]; do
 done
 self_dir="$(cd -- "$(dirname -- "$self_path")" && pwd)"
 
-repo_root=""
-dir="$PWD"
-while [[ "$dir" != "/" ]]; do
-  if [[ -f "$dir/.devcontainer/devcontainer.json" ]]; then
-    repo_root="$dir"
-    break
-  fi
-  dir="$(dirname -- "$dir")"
-done
+# shellcheck source=scripts/repo-root.sh disable=SC1091
+. "$self_dir/scripts/repo-root.sh"
+repo_root="$(find_repo_root_from_pwd || true)"
 if [[ -z "$repo_root" ]]; then
   fallback_root="$(cd -- "$self_dir/../.." && pwd)"
   if [[ -f "$fallback_root/.devcontainer/devcontainer.json" ]]; then
@@ -39,6 +33,14 @@ if [[ -z "$repo_root" ]]; then
   echo "No .devcontainer/devcontainer.json found above: $PWD" >&2
   echo "Run from inside a project set up with install.sh (or via its .devcontainer/vibe)." >&2
   exit 1
+fi
+
+# `vibe update` needs only git — dispatch it before the devcontainer-CLI check
+# below so it also works from inside the container, where an agent has git but
+# neither npx nor docker (update.sh prints the rebuild handoff instead).
+if [ "${1:-}" = "update" ]; then
+  shift
+  VIBE_REPO_ROOT="$repo_root" exec bash "$self_dir/scripts/update.sh" "$@"
 fi
 
 # Pin the npx fallback: `@devcontainers/cli` (unversioned) resolves the mutable
@@ -112,11 +114,8 @@ case "$command_name" in
     # long-lived services session a project's post-start hook stands up.
     # Session name: argument > DEV_ATTACH_TMUX_SESSION in config.env > "main".
     ensure_up
-    # shellcheck disable=SC2016  # expansion happens inside the container shell
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
-      bash -lc 'source .devcontainer/config.env
-        session="${1:-${DEV_ATTACH_TMUX_SESSION:-main}}"
-        exec tmux -u new-session -A -s "$session"' _ "${1:-}"
+      bash .devcontainer/harness/scripts/agent-entry.sh attach "$@"
     ;;
   shell)
     ensure_up
@@ -124,63 +123,11 @@ case "$command_name" in
     ;;
   agent)
     ensure_up
-    # With DEV_AGENT_TMUX=1 the agent runs inside a tmux session: it survives a
-    # dropped terminal, and a second `vibe agent` reattaches (-A) instead of
-    # double-launching. `.env` still loads only inside the pane process via
-    # env-run.sh — never into the tmux server or an interactive shell.
-    # --cold starts the agent without repo instruction files (CLAUDE.md/AGENTS.md
-    # and .claude customizations) for an unbiased session. -a/--agent overrides
-    # DEV_AGENT_CMD for this invocation (e.g. vibe agent -a codex). Either variant
-    # gets its own tmux session so it never reattaches to the default warm one.
-    cold=0
-    agent_override=""
-    while [ "$#" -gt 0 ]; do
-      case "$1" in
-        --cold)
-          cold=1
-          shift
-          ;;
-        -a|--agent)
-          if [ "$#" -lt 2 ]; then
-            echo "Usage: vibe agent [--cold] [-a|--agent COMMAND] [ARGUMENT ...]" >&2
-            exit 2
-          fi
-          agent_override="$2"
-          shift 2
-          ;;
-        *)
-          break
-          ;;
-      esac
-    done
-    # shellcheck disable=SC2016  # expansion happens inside the container shell
+    # All agent logic (flag parsing, DEV_AGENT_CMD resolution, tmux wrapping)
+    # lives container-side in agent-entry.sh, which gets real argv via exec —
+    # no payload string, no re-quoting on this side of the boundary.
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
-      bash -lc 'source .devcontainer/config.env
-        set -f  # split DEV_AGENT_CMD/-a on spaces without expanding globs (e.g. *)
-        cold="$1"; agent_override="$2"; shift 2
-        session="${DEV_AGENT_TMUX_SESSION:-agent}"
-        if [ -n "$agent_override" ]; then
-          agent_cmd=($agent_override)
-          session="$session-${agent_cmd[0]}"
-        else
-          agent_cmd=(${DEV_AGENT_CMD:-claude})
-        fi
-        if [ "$cold" = "1" ]; then
-          case "${agent_cmd[0]}" in
-            claude) agent_cmd+=(--safe-mode) ;;
-            codex)  agent_cmd+=(-c project_doc_max_bytes=0) ;;
-            *)
-              echo "vibe agent --cold: no known instruction-skip flags for: ${agent_cmd[0]}" >&2
-              exit 2
-              ;;
-          esac
-          session="$session-cold"
-        fi
-        cmd=(.devcontainer/harness/scripts/env-run.sh "${agent_cmd[@]}" "$@")
-        if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
-          exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")"
-        fi
-        exec "${cmd[@]}"' _ "$cold" "$agent_override" "$@"
+      bash .devcontainer/harness/scripts/agent-entry.sh agent "$@"
     ;;
   doctor)
     ensure_up
@@ -212,15 +159,14 @@ case "$command_name" in
       bash .devcontainer/harness/scripts/show-image.sh "$@"
     ;;
   review)
-    # Interactive image viewer in the INVOKING terminal: chafa renders straight
-    # to it, no tmux between the pixels and the screen — the reliable path;
-    # prefix+i inside the agent session is the best-effort tmux flavor of the
-    # same viewer. Verdict recording (approve/reject + note -> JSONL) turns on
-    # only with a DIR argument (`vibe review renders/batch1`) or
-    # VIBE_PREVIEW_DECISIONS in config.env; otherwise it just views.
+    # yazi in the INVOKING terminal (prefix+i inside the agent session opens
+    # the same thing as a dedicated tmux window). The harness binds A=approve
+    # and R=reject-with-note (vibe.yazi plugin; verdicts land in
+    # .review-decisions.jsonl beside the images); the project-owned
+    # .devcontainer/yazi/ layers preferences and rebinds on top.
     ensure_up
     exec "${cli[@]}" exec --workspace-folder "$repo_root" \
-      bash .devcontainer/harness/scripts/preview-viewer.sh "$@"
+      bash .devcontainer/harness/scripts/review.sh "$@"
     ;;
   clip)
     # Host-side: grabs the OS clipboard image; container /tmp by default, or a
@@ -240,6 +186,8 @@ Commands:
   build       Build the Dev Container image
   status      Show this project's container(s)
   down        Stop & remove this project's container (named volumes are kept)
+  update [TAG]  Move the harness pin to TAG (default: newest release): fetch,
+              show changelog delta + diff, checkout, stage — commit & rebuild stay yours
   shell       Open a Bash shell in the container
   attach      Attach/create a tmux session in the container
               (SESSION argument > DEV_ATTACH_TMUX_SESSION > "main")
@@ -253,8 +201,8 @@ Commands:
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
-  review [DIR]  View images; with DIR (or VIBE_PREVIEW_DECISIONS set), record
-              approve/reject verdicts (+ optional reject note) to JSONL
+  review [DIR]  Browse/review images with yazi; A approves, R rejects (with
+              optional note) to .review-decisions.jsonl beside the images
 HELP
     ;;
   *)

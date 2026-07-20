@@ -26,6 +26,11 @@ ARG INSTALL_BUN=false
 ARG BUN_VERSION=1.3.14
 ARG INSTALL_ROKIT=false
 ARG ROKIT_VERSION=1.2.0
+# yazi: the image-review file manager (vibe review / the preview window).
+# Release binary pinned by version + checksum per arch, like rokit/uv.
+ARG YAZI_VERSION=26.5.6
+ARG YAZI_SHA256_AMD64=1c9096f0a83b8102c194385f644cdeff93cc8269426163c9d033041ebd537bd2
+ARG YAZI_SHA256_ARM64=c38b07961e7fc4c76503fd0f4a1b4bd0b379a99835b818cd899b0315c728e1e1
 
 ENV LANG=C.UTF-8 \
     PATH=/home/vscode/.local/bin:/home/vscode/.bun/bin:/home/vscode/.rokit/bin:${PATH}
@@ -40,6 +45,7 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
         chafa \
         curl \
         fd-find \
+        file \
         gh \
         git \
         git-lfs \
@@ -59,11 +65,31 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 COPY config/tmux.conf /etc/tmux.conf
-# Baked under fixed names so tmux.conf bindings can call them — the
-# per-project harness path isn't known at image build time.
+# Baked under fixed names so tmux.conf bindings and yazi keymaps can call
+# them — the per-project harness path isn't known at image build time (and
+# yazi shell commands run from whatever directory is being browsed).
 COPY --chmod=0755 scripts/show-image.sh /usr/local/bin/vibe-show-image
-COPY --chmod=0755 scripts/preview-viewer.sh /usr/local/bin/vibe-preview
+COPY --chmod=0755 scripts/review.sh /usr/local/bin/vibe-preview
+COPY --chmod=0755 scripts/review-verdict.sh /usr/local/bin/vibe-verdict
 COPY --chmod=0644 scripts/preview-lib.sh /usr/local/lib/vibe/preview-lib.sh
+COPY config/yazi /usr/local/lib/vibe/yazi
+
+# yazi renders the images itself (sixel/kitty/iTerm2 detection built in);
+# file(1) is its mime-detection dependency. `ya` is its remote control — the
+# Claude Code hook uses it to reveal images in the running review instance.
+RUN tmp="$(mktemp -d)" \
+    && case "$(uname -m)" in \
+         x86_64)  arch=x86_64;  sha="${YAZI_SHA256_AMD64}" ;; \
+         aarch64) arch=aarch64; sha="${YAZI_SHA256_ARM64}" ;; \
+         *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL -o "$tmp/yazi.zip" \
+        "https://github.com/sxyazi/yazi/releases/download/v${YAZI_VERSION}/yazi-${arch}-unknown-linux-gnu.zip" \
+    && echo "${sha}  $tmp/yazi.zip" | sha256sum -c - \
+    && unzip -q "$tmp/yazi.zip" -d "$tmp" \
+    && install -m 0755 "$tmp/yazi-${arch}-unknown-linux-gnu/yazi" \
+        "$tmp/yazi-${arch}-unknown-linux-gnu/ya" /usr/local/bin/ \
+    && rm -rf "$tmp"
 
 # Node is required by the npm-distributed Codex CLI and available standalone.
 RUN if [ "${INSTALL_NODE}" = "true" ] || [ "${INSTALL_CODEX}" = "true" ]; then \

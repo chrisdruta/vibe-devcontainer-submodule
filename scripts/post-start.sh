@@ -9,10 +9,8 @@ cd -- "$REPO_ROOT"
 
 # Self-heal execution bits on the project-owned launchers: checkouts done with
 # core.fileMode=false (Windows-side clones, some VS Code git operations) restore
-# these files without the +x recorded at install time. (`dev` is the pre-rename
-# wrapper name still present in older installs.)
-chmod +x "$DEVCONTAINER_DIR/vibe" "$DEVCONTAINER_DIR/dev" \
-  "$DEVCONTAINER_DIR/project/"*.sh 2>/dev/null || true
+# these files without the +x recorded at install time.
+chmod +x "$DEVCONTAINER_DIR/vibe" "$DEVCONTAINER_DIR/project/"*.sh 2>/dev/null || true
 
 # Complete GitHub git wiring when — and only when — the user has logged into gh:
 # the login is the opt-in; without it this block never runs. gh becomes git's

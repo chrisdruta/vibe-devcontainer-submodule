@@ -79,12 +79,15 @@ Application integrations stay in the project's own configuration:
 For pipelines that produce image batches (Blender renders, generated
 textures/sprites, concept art), give each pipeline stage its own output
 directory and review each gate with `vibe review <dir>` from any host
-terminal — verdicts (approve/reject, plus an optional one-line reject note
-the regenerating agent can steer by) append to `<dir>/vibe-decisions.jsonl`.
-A staged asset flow maps one review per gate — e.g. concept art → angle
-sheets → render batches, each a directory the generating agent writes into
-and then polls the verdict file of. The stage state machine (what "reject"
-triggers: regenerate vs refine) belongs to the project's agent skills, not
-the harness. Alternatively set `VIBE_PREVIEW_DIR`/`VIBE_PREVIEW_DECISIONS`
-in `config.env` to make the `prefix+i` window review a fixed directory —
-see [usage.md](usage.md#reviewing-images).
+terminal — `A`/`R` (the harness's review keybindings; rebindable in the
+project-owned `.devcontainer/yazi/keymap.toml`) append approve/reject
+verdicts to `<dir>/.review-decisions.jsonl`, beside the images they judge,
+with a ✓/✗ badge column showing what's already judged. A staged
+asset flow maps one review per gate — e.g. concept art → angle sheets →
+render batches, each a directory the generating agent writes into and then
+polls the verdict file of. The stage state machine (what "reject" triggers:
+regenerate vs refine) belongs to the project's agent skills, not the
+harness — and so do the keybindings: extend the keymap with e.g. a
+reject-with-note binding (`vibe-verdict reject PATH note words…`) to give
+the regenerating agent steering text — see
+[usage.md](usage.md#reviewing-images).

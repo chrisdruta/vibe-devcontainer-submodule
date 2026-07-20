@@ -4,6 +4,21 @@ Every consuming project pins the harness submodule to a **commit SHA** — nothi
 changes underneath you until you deliberately move the pin. Treat updates as a
 review-the-diff moment, not a blind pull.
 
+## Fastest: `vibe update`
+
+```bash
+./.devcontainer/vibe update          # newest release tag
+./.devcontainer/vibe update v0.6.0   # a specific tag — same command rolls back
+```
+
+One command for the recommended flow below: fetches tags, prints the
+CHANGELOG sections between the two pins and the diff stat, checks out the
+tag, and **stages** the pin move. It never commits and never rebuilds — you
+still review `git diff --cached --submodule`, commit, and rebuild when it
+reports that the `Dockerfile` changed. It also works from inside the
+container (agents can run `bash .devcontainer/harness/scripts/update.sh`
+directly); the rebuild step it prints still belongs to the host.
+
 ## Recommended: update to a tagged release
 
 ```bash
@@ -56,7 +71,9 @@ done
 Moving the pin is mechanical; reconciling the project-owned seeded files with
 what new versions expect (new `containerEnv` keys, settings denies, wrapper
 changes) is the judgment-call part — like [onboarding](onboarding.md), a good
-job for an agent. Paste into an agent at the project root:
+job for an agent. Steps 1–2 are `vibe update` (in-container:
+`bash .devcontainer/harness/scripts/update.sh`); the rest is the
+reconciliation judgment. Paste into an agent at the project root:
 
 ```text
 Update this project's vibe-devcontainer-submodule harness pin and reconcile

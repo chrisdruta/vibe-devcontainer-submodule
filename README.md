@@ -71,7 +71,7 @@ Or open the repository in VS Code and choose **Reopen in Container**.
 | `vibe shell`     | Open a Bash shell inside the container                    |
 | `vibe clip`      | Save the host clipboard image for the container (image-paste workaround) |
 | `vibe show`      | Preview an image in the terminal (default: newest `vibe clip` capture) |
-| `vibe review [DIR]` | View images in a watched directory; with `DIR` (or `VIBE_PREVIEW_DECISIONS`), record approve/reject + note verdicts to JSONL |
+| `vibe review [DIR]` | Browse/review images with yazi; `A` approves, `R` rejects (optional note) to `.review-decisions.jsonl` beside the images |
 | `vibe doctor`    | Check the environment (run this first when things break)  |
 | `vibe rebuild`   | Recreate after editing `devcontainer.json`/Dockerfile     |
 
@@ -96,6 +96,13 @@ and [docs/agent-state.md](docs/agent-state.md).
 ## Update
 
 Projects pin the harness to a commit; updating is an explicit, reviewable step:
+
+```bash
+./.devcontainer/vibe update    # fetch, show changelog delta + diff, checkout, stage
+```
+
+…which automates the manual flow (and `vibe update vX.Y.Z` targets or rolls
+back to a specific tag):
 
 ```bash
 git -C .devcontainer/harness fetch --tags

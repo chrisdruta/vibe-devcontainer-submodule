@@ -21,6 +21,11 @@ you if ignored:
 - **`~/.agents` is a persistent named volume** (agent logins, browser
   binaries); everything else in `$HOME` resets on rebuild. Install user-level
   tools to `~/.local/bin`.
+- **Harness updates**: `bash .devcontainer/harness/scripts/update.sh [TAG]`
+  (what `vibe update` wraps) fetches tags, prints the CHANGELOG delta, checks
+  out the newest (or given) release, and STAGES the pin move — it never
+  commits; that stays with the user. Report the staged diff, and when it
+  flags a rebuild, ask the user to run that on the host.
 - **Diagnostics**: `.devcontainer/harness/scripts/doctor.sh` checks the
   environment; its output from the last start is in `/tmp/dev-doctor.log`.
 

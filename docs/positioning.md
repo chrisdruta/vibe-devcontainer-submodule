@@ -19,11 +19,23 @@ Agent tooling has settled into three layers:
 3. **The environment** — where the agent process actually executes and what
    it can reach.
 
-This project is layer 3 only: a hardened, reproducible container that agent
+This project is layer 3: a hardened, reproducible container that agent
 CLIs run *inside*, pinned into each project as a git submodule. It does not
 compete with the layers above. Minimal harnesses explicitly tell users to
 bring their own container for boundaries — this is that container — and an
 orchestrator could drive containers like this instead of bare worktrees.
+
+"The environment" includes the terminal the agent lives in, so the harness
+also owns the affordances that make an agent workable *inside* that
+environment: getting a host clipboard image through the boundary
+(`vibe clip`), rendering pixels a TUI cannot (`vibe show`, the tmux preview
+window), and looking at what an agent produced without leaving the terminal
+(`vibe review` — yazi with project-owned config; verdict recording is a
+seeded keybinding the project owns, not harness code). The line stays where
+it always was:
+anything that *drives* the agent — loops, schedulers, task state machines,
+multi-agent review pipelines — belongs to layers 1–2 and is a non-goal;
+project skills may build such flows *on top of* these affordances.
 
 ## Principles
 

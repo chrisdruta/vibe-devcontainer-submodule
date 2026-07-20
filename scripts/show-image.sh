@@ -43,8 +43,8 @@ fi
 
 path="${1:-}"
 if [ -z "$path" ]; then
-  # Newest image by mtime across /tmp clips AND the review-viewer watch dir
-  # (VIBE_PREVIEW_DIR/GLOB, resolved the same way preview-viewer.sh does).
+  # Newest image by mtime across /tmp clips AND VIBE_PREVIEW_DIR/GLOB
+  # from config.env (where captures and generated images land).
   for cfg in "$script_dir/../../config.env" "$PWD/.devcontainer/config.env"; do
     # shellcheck disable=SC1090  # runtime project config, path known only here
     if [ -f "$cfg" ]; then . "$cfg"; break; fi
@@ -111,9 +111,9 @@ if [ -n "${TMUX:-}" ]; then
   # build ingests raw sixel yet never re-emits it to the client, so native
   # compositing shows only "+" placeholders. Passthrough paints at the
   # client cursor — correct when this pane is focused in a calm window
-  # (manual use, the review viewer's window), garbage next to a busy agent
-  # TUI, which is why hooks feed preview-viewer.sh instead of rendering
-  # into shared windows. Kept on chafa deliberately: chafa pairs its sizing
+  # (manual use), garbage next to a busy agent
+  # TUI, which is why hooks feed the yazi preview window instead of
+  # rendering into shared windows. Kept on chafa deliberately: chafa pairs its sizing
   # assumption with matching text-level cursor advancement OUTSIDE the
   # envelope, which a hand-wrapped img2sixel raster cannot replicate
   # (either CSI leaks into the envelope or the prompt overlaps the image).

@@ -164,6 +164,7 @@ render "$script_dir/templates/config.env" "$destination/config.env"
 cp -- "$script_dir/templates/vibe" "$destination/vibe"
 cp -- "$script_dir/templates/agents.md" "$destination/AGENTS.md"
 cp -a -- "$script_dir/templates/project" "$destination/project"
+cp -a -- "$script_dir/templates/yazi" "$destination/yazi"
 chmod +x "$destination/vibe" "$destination/project/"*.sh
 
 # Claude Code project settings (statusline, sudo/.env-read deny). Seeded only when the
@@ -184,7 +185,8 @@ git -C "$target" add \
   .devcontainer/config.env \
   .devcontainer/vibe \
   .devcontainer/AGENTS.md \
-  .devcontainer/project
+  .devcontainer/project \
+  .devcontainer/yazi
 if [[ $claude_settings_seeded -eq 1 ]]; then
   git -C "$target" add .claude/settings.json
 fi

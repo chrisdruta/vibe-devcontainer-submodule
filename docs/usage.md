@@ -135,82 +135,70 @@ Gitignore the directory if you use this mode routinely.
 
 Agent TUIs show attached images only as a `[Image 1]` placeholder — the Claude
 Code terminal UI cannot render images inline (upstream: not planned). The
-harness renders them with sixel graphics instead, in a dedicated tmux window:
+harness fills the gap with [yazi](https://yazi-rs.github.io/) (baked into the
+image, pinned by checksum) plus a one-shot renderer:
 
-- **`vibe review`** (host, any terminal tab) runs the full review UI in the
-  invoking terminal — chafa renders straight to it with no tmux between the
-  pixels and the screen. This is the reliable path.
+- **`vibe review [DIR]`** (host, any terminal tab) opens yazi in the invoking
+  terminal at `DIR` (workspace-relative) or the current directory — browse,
+  search, and preview images with yazi's native rendering (sixel on Windows
+  Terminal ≥ 1.22; protocol auto-detected).
 - Inside the agent tmux session, **prefix + `i`** jumps to (or creates) the
-  **`preview` window** — the same UI as a tmux window (best effort: tmux
-  3.5a's sixel handling has rough edges; `r` re-renders).
-- `vibe show [PATH]` (host, outside tmux) renders one image in the invoking
-  terminal; with no argument, the newest clip or watched image.
+  **`preview` window** — a yazi instance in a dedicated window (tmux 3.5a
+  drops sixel on redraws of inactive panes, so review gets a full window, not
+  a split).
+- `vibe show [PATH]` renders one image in the invoking terminal and returns —
+  the no-TUI path; with no argument, the newest clip or
+  `VIBE_PREVIEW_DIR` image. `vibe show --diag PATH` explains a failing
+  render (format vs extension, renderer, stderr) instead of drawing.
 
-The viewer has two modes. **Passive** (the default): flip through images that
-land in `VIBE_PREVIEW_DIR` matching `VIBE_PREVIEW_GLOB` (both in `config.env`;
-defaults `/tmp` and common image extensions), newest first — the mode for
-glancing at clips and pastes, with no decision asked of you. **Review**: the
-same UI plus verdict keys and a per-image verdict label, active only when a
-decisions target exists — pass a directory (`vibe review renders/batch1`,
-workspace-relative) to review it as a batch, or set `VIBE_PREVIEW_DECISIONS`
-in `config.env` to make every viewer instance (including the `preview`
-window) record verdicts. Keys, single press:
+Both entry points run a **layered config**: the harness supplies the review
+machinery (the `vibe.yazi` plugin, the verdict keybindings, a ✓/✗ badge
+column), and the project-owned `.devcontainer/yazi/` (seeded once from
+`templates/yazi/`) supplies preferences on top — its `yazi.toml`/
+`theme.toml` replace the harness's, its `keymap.toml` entries merge in
+front (so they win on conflict), and its `init.lua` runs after the
+harness's. Review keys — chosen because yazi's defaults leave them unbound,
+so `a`/`r` keep their create/rename meanings:
 
-| Key | Action | Mode |
-| --- | --- | --- |
-| `h` / `←` | newer image | both |
-| `l` / `→` | older image | both |
-| `g` | jump to newest | both |
-| `y` | approve (recorded, advances) | review |
-| `n` / `x` | reject — prompts for an optional one-line note, then advances | review |
-| `r` | force re-render | both |
-| `d` | render diagnostics for the current image (format, renderer, error) | both |
-| `q` | close the window | both |
+- `A` — approve the hovered image (toast confirms)
+- `R` — reject it; an input box asks for an optional one-line note (Enter
+  skips, Esc cancels the reject)
 
-Verdicts append to the JSONL decisions file (`VIBE_PREVIEW_DECISIONS`, or
-`vibe-decisions.jsonl` inside a `DIR` argument): one
-`{"ts":…,"path":…,"verdict":"approve"|"reject"}` per line — plus a `"note"`
-field when you typed one at the reject prompt, which is what gives a
-regenerating agent something to steer with. Append-only; the last line per
-path wins, so re-deciding an image just works. A pipeline or agent consumes
-it with e.g. `jq -s 'group_by(.path) | map(last)' vibe-decisions.jsonl`.
-For staged pipelines (concept art → angle sheets → renders), give each batch
-its own directory and run `vibe review <dir>` per gate — the verdict file
-lands next to the images it judges.
+Judged files get a persistent `✓`/`✗` badge in the list (the `verdict`
+linemode — existing verdicts load from the decisions file the first time
+you judge in a directory). Verdicts append as
+`{"ts":…,"path":…,"verdict":"approve"|"reject"[,"note":…]}` JSONL lines to
+`.review-decisions.jsonl` **in the directory being browsed** — beside the
+images they judge, hidden from the listing as a dotfile. Set
+`VIBE_REVIEW_DECISIONS` in `config.env` to send every verdict to one fixed
+file instead. Append-only; the last line per path wins, so re-deciding an
+image just works. A pipeline or agent consumes it with e.g.
+`jq -s 'group_by(.path) | map(last)' .review-decisions.jsonl`. For staged
+pipelines (concept art → angle sheets → renders), give each batch its own
+directory and run `vibe review <dir>` per gate. The raw helper is also
+scriptable: `vibe-verdict reject PATH note words…`.
 
-Claude Code sessions feed the viewer automatically: hooks in the seeded
-`.claude/settings.json` (from `templates/claude-settings.json`) fire when you
-submit a prompt containing an image path and whenever the agent `Read`s an
-image file. The image queues into the viewer and is selected there; if the
-`preview` window isn't focused, its name lights up in the status bar instead
-of anything stealing your screen. When Claude Code converts a pasted path
-into an `[Image #N]` *attachment* the path never reaches the hook (the
-payload only carries the placeholder), so the hook falls back to the newest
+Claude Code sessions feed the preview window automatically: hooks in the
+seeded `.claude/settings.json` (from `templates/claude-settings.json`) fire
+when you submit a prompt containing an image path and whenever the agent
+`Read`s an image file. The hook ensures the `preview` window exists and
+tells its yazi to reveal the image over DDS (`ya emit-to`); if the window
+isn't focused, its name lights up in the status bar instead of anything
+stealing your screen. When Claude Code converts a pasted path into an
+`[Image #N]` *attachment* the path never reaches the hook (the payload only
+carries the placeholder), so the hook falls back to the newest
 `/tmp/clip-*.png` captured in the last 10 minutes — right for the
 `vibe clip` → paste flow. Existing projects adopt the hooks by merging the
 template block during a [pin update](updating.md).
 
-Rendering notes: sixel needs a capable outer terminal (Windows Terminal
-≥ 1.22 qualifies; tmux auto-detects — check
-`tmux display -p '#{client_termfeatures}'`); other clients degrade to
-`chafa` cell art. Small `png`/`jpeg`/`gif`/`bmp` images render through
-`img2sixel` with **integer nearest-neighbor upscaling** — actual pixels, no
-color blending — while images larger than the pane downscale smoothly
-(lanczos3); `webp`/`avif`/`svg` always render via `chafa` (smooth only,
-`img2sixel` can't decode them), and `bmp` is the mirror case — only
-`img2sixel` decodes it, so it needs a sixel-capable terminal. The real
-format is sniffed from file
-content, never the extension — generated assets are often webp bytes named
-`.jpg`, and those now route correctly. tmux 3.5a drops sixel images on
-client redraws and pane resizes, which is why review lives in its own
-window (tmux only repaints the active window) and the viewer re-renders on
-entry plus continuously heals the image on idle ticks — `r` forces a full
-re-render. When an image won't show, press `d` in the viewer or run
-`vibe show --diag PATH`: format vs extension, native size, renderer choice,
-exit code, and the renderer's actual stderr; every render attempt also logs
-one line to the debug log (`$XDG_RUNTIME_DIR/.vibe-preview-debug.log`, or
-`/tmp/…` without XDG). Outside tmux, `chafa` probes the terminal and falls
-back to unicode blocks where sixel is unavailable.
+Rendering notes: yazi detects the terminal's image protocol itself (sixel on
+Windows Terminal ≥ 1.22; kitty/iTerm2 protocols elsewhere; chafa cell-art
+fallback) — check `tmux display -p '#{client_termfeatures}'` when previews
+degrade inside tmux. `vibe show` keeps the harness's own render path for
+one-shot use: small `png`/`jpeg`/`gif`/`bmp` render through `img2sixel` with
+integer nearest-neighbor upscaling (actual pixels, no blending),
+`webp`/`avif`/`svg` via `chafa`, and the real format is always sniffed from
+file content, never the extension.
 
 ## Troubleshooting
 

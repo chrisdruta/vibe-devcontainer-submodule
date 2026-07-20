@@ -77,6 +77,9 @@ fi
 if [[ "$DEV_AUTO_GIT_HOOKS" == "1" && -d .githooks ]]; then
   hooks_path="$REPO_ROOT/.githooks"
   run_step "Configuring repository Git hooks" git config --local core.hooksPath "$hooks_path"
+  # Loud on purpose: .git/config lives on the shared mount, so these hooks
+  # also run when git is used on the HOST (docs/security.md); doctor NOTEs it.
+  log "NOTE: .githooks/ wired into core.hooksPath — runs on the host too; DEV_AUTO_GIT_HOOKS=0 disables"
 fi
 
 if [[ "$DEV_AUTO_GIT_LFS" == "1" && -f .gitattributes ]] \

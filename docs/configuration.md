@@ -19,9 +19,9 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `DEV_AUTO_GIT_LFS`      | `1`                           | Repo-local `git lfs install` when LFS attributes exist |
 | `DEV_ENV_FILE`          | `.env`                        | File loaded by `vibe agent` / `vibe run` / `env-run.sh` |
 | `DEV_REQUIRED_COMMANDS` | `git gh jq rg uv claude` (+preset) | Commands `vibe doctor` requires                |
-| `VIBE_PREVIEW_DIR`      | `/tmp`                        | Directory the image viewer watches (see [usage.md](usage.md)) |
-| `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.gif *.bmp *.webp *.avif` | Space-separated glob list for the watch directory (filters watching only; the renderer sniffs the real format from file content) |
-| `VIBE_PREVIEW_DECISIONS`| unset (viewer is passive)     | Set to a JSONL path to enable review mode: approve/reject (+ reject note) verdicts append there. `vibe review DIR` enables it per batch without config. |
+| `VIBE_PREVIEW_DIR`      | `/tmp`                        | Where `vibe show` (no argument) looks for the newest image |
+| `VIBE_PREVIEW_GLOB`     | `*.png *.jpg *.jpeg *.gif *.bmp *.webp *.avif` | Space-separated glob list for that search (search filter only; the renderer sniffs the real format from file content) |
+| `VIBE_REVIEW_DECISIONS` | unset                         | Send all `vibe-verdict` output to one fixed JSONL path instead of `.review-decisions.jsonl` beside the reviewed images. The review keybindings themselves live in project-owned `.devcontainer/yazi/` (see [usage.md](usage.md)). |
 
 ## Bootstrap behavior
 

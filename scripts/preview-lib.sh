@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 #
-# Shared helpers for the image preview stack (preview-viewer.sh and
-# show-image.sh source this; preview-image-hook.sh stays standalone). Pure
+# Shared helpers for `vibe show` (show-image.sh sources this;
+# preview-image-hook.sh stays standalone, and yazi does its own decoding). Pure
 # bash + od/stat on purpose: the image has no `file`, ImageMagick, or python,
 # and the preview path must not grow dependencies.
 #
@@ -22,8 +22,10 @@
 # (Dockerfile). Written to survive `set -e` callers: no bare failing
 # commands, every read/expansion guarded.
 
-# Canonical image extension list — the watch-glob defaults, the hook's
-# regexes, config.env templates, and docs/ must stay in sync with this.
+# Canonical image extension list. preview-image-hook.sh reads this exact
+# assignment line with sed (it must not source executable code — hook stdout
+# leaks into model context), so keep it a plain one-line double-quoted
+# literal. config.env templates and docs/ still sync by hand.
 VIBE_IMAGE_EXTS="png jpg jpeg gif bmp webp avif"
 
 # One line per render attempt, self-truncating — silent blank images were

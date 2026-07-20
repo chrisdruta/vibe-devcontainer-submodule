@@ -10,7 +10,9 @@ DEVCONTAINER_DIR="$(cd -- "$HARNESS_DIR/.." && pwd)"
 
 find_repo_root() {
   # Anchor on the project's .devcontainer dir, not the harness: inside the submodule,
-  # git rev-parse would report the submodule's own toplevel.
+  # git rev-parse would report the submodule's own toplevel. Deliberately NOT the
+  # $PWD ancestor walk in repo-root.sh: lifecycle scripts belong to a fixed
+  # project (where they live); host tools resolve whichever project you're in.
   if root="$(git -C "$DEVCONTAINER_DIR" rev-parse --show-toplevel 2>/dev/null)"; then
     printf '%s\n' "$root"
   else
