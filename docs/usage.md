@@ -177,13 +177,14 @@ container's) installs to `~/.local` with:
 bash .vibe/harness/src/scripts/host/install-tmux.sh   # VIBE_UI_TMUX=... to point elsewhere
 ```
 
-Keys (prefix is **Ctrl+Space** or **Ctrl+a** — Windows often eats
-Ctrl+Space before the terminal sees it (IME toggle, WT NUL handling), so
-Ctrl+a is a full equivalent; double-tap it to send a literal Ctrl+a
-through. The inner agent session keeps its own `Ctrl+b`, so in-agent
-habits still work. Windows Terminal also swallows `Alt+arrows` for its
-own pane-focus bindings — unbind them in WT settings or use
-`prefix+arrows` / `Alt+1..9` instead):
+Keys (prefix is **Ctrl+Space**, with **Ctrl+a** as a full equivalent for
+setups where an IME owns Ctrl+Space; double-tap Ctrl+a to send a literal
+one through. The inner agent session keeps its own `Ctrl+b`, so in-agent
+habits still work. If NO chord works, the socket is likely serving a
+stale or conf-less server — check `tmux -L vibe show -g prefix2` (expect
+`C-a`) and reset with `tmux -L vibe kill-server` + `vibe ui`. Windows
+Terminal swallows `Alt+arrows` for its own pane-focus bindings — unbind
+them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 
 | Chord | Effect |
 | --- | --- |
