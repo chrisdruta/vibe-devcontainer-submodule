@@ -166,9 +166,17 @@ designed; entries here are one paragraph of intent, not a spec.
   does not render images on 3.7b (its terminal detection through tmux
   doesn't recognize the new ingest; deliberately NOT chased — the native
   pane is the documented best review surface, and upstream yazi is more
-  likely to fix tmux detection than we are). Still open, low priority:
-  whether `vibe show`'s in-tmux path can drop `--passthrough tmux` for
-  native ingest, and review-as-split. The devcontainer boundary is a
+  likely to fix tmux detection than we are). RESOLVED 2026-07-21 (vibe
+  ui host smoke): the in-tmux path DOES drop `--passthrough tmux` when
+  the client is declared sixel-capable — native ingest is the only
+  rendering that survives nesting (passthrough is one transient copy the
+  outer tmux wipes on its next repaint of those cells), host-validated
+  through host-tmux→container-tmux; the unlock was declaring
+  `terminal-features ",*:sixel"` on the inner server (its client, the
+  outer tmux, never advertises sixel in DA — the same missing
+  declaration behind the historical "+" placeholders). Resize still
+  clears (upstream reflow; rerun repaints). Still open, low priority:
+  review-as-split. The devcontainer boundary is a
   non-issue
   (escapes pass through the `docker exec` TTY; DA1 probing already bails
   under `$TMUX` in preview-lib.sh).
@@ -231,5 +239,10 @@ designed; entries here are one paragraph of intent, not a spec.
   documented quit, prefix+d = detach, both in the palette), and the
   running-server-pins-the-old-binary trap after a tmux upgrade (ui.sh
   now warns on server/client version skew and prints the kill-server
-  line). Still unverified: nested sixel on the 3.7b host server,
-  clickable "+" user-range mouse value.
+  line). Nested sixel RESOLVED same day: native ingest at the inner
+  server (see the amended image-stack record above) renders and
+  persists through redraws on the 3.7b host server; resize clears
+  (upstream, rerun repaints). The `,*:sixel` terminal-feature ships in
+  the container tmux.conf — baked into the image, so consumers get it
+  on their next rebuild (dogfood ran it live-set until then). Still
+  unverified: clickable "+" user-range mouse value.

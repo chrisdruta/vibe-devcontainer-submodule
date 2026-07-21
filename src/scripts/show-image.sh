@@ -119,16 +119,22 @@ if [ -n "${TMUX:-}" ]; then
   # (either CSI leaks into the envelope or the prompt overlaps the image).
   # Crisp nearest-neighbor pixels inside tmux live in the preview window
   # (prefix+i), which anchors and heals the raster properly.
-  # VIBE_SHOW_NATIVE=1: nested-tmux experiment (vibe ui) — emit RAW sixel
-  # and let THIS tmux ingest it natively instead of forwarding one
-  # transient copy outward. Passthrough dies under nesting: the outer
-  # tmux composites the image onto cells the inner tmux repaints as
-  # blanks moments later (prompt print/scroll), wiping it. Native ingest
-  # makes each 3.7b layer re-emit the image on redraw. Requires the
-  # inner server to believe its client accepts sixel
-  # (terminal-features ",*:sixel"), else it draws "+" placeholders.
-  if [ "${VIBE_SHOW_NATIVE:-0}" = "1" ]; then
-    dlog "show(tmux pane) $path fmt=$(sniff_format "$path") via chafa native ingest (VIBE_SHOW_NATIVE)"
+  # Native ingest vs passthrough (host-validated under vibe ui,
+  # 2026-07-21): when this tmux's CLIENT is declared sixel-capable
+  # (terminal-features — shipped in tmux.conf; the client under vibe ui
+  # is the host tmux 3.7b), emit RAW sixel and let this server ingest it.
+  # It then re-emits the image on every redraw, which is the only path
+  # that survives nesting — passthrough forwards one transient copy that
+  # the outer tmux composites onto cells this tmux repaints as blanks
+  # moments later (prompt print/scroll), wiping it. Resize still clears
+  # (upstream reflow); rerun to repaint. Feature-less clients keep the
+  # passthrough path. VIBE_SHOW_NATIVE=1/0 forces either way.
+  client_features="$(tmux display-message -p '#{client_termfeatures}' 2>/dev/null || true)"
+  native=0
+  case ",$client_features," in *,sixel,*) native=1 ;; esac
+  case "${VIBE_SHOW_NATIVE:-}" in 1) native=1 ;; 0) native=0 ;; esac
+  if [ "$native" = 1 ]; then
+    dlog "show(tmux pane) $path fmt=$(sniff_format "$path") via chafa native ingest (client sixel)"
     exec chafa -f sixel --animate off "$path"
   fi
   dlog "show(tmux pane) $path fmt=$(sniff_format "$path") via chafa --passthrough tmux"
