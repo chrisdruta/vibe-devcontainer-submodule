@@ -5,20 +5,22 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
-- **New: `vibe diff` — read-only diff review with revdiff (rebuild
-  required).** The 2026-07-21 yazi re-evaluation split the review story in
-  two: yazi stays the general read-only browser (and image surface), and
+- **New: revdiff — read-only diff review (rebuild required).** The
+  2026-07-21 yazi re-evaluation split the review story in two: yazi stays
+  the general read-only browser (and image surface), and
   [revdiff](https://github.com/umputun/revdiff) — a purpose-built,
   read-only-by-construction diff-review TUI — becomes the "review what the
-  agent changed" surface. `vibe diff` runs it in the invoking terminal
-  (all flags pass through: `--staged`, `--untracked`, base/against refs);
-  `v` toggles between the final file text and its diff, and annotations
-  made during review print to stdout on quit — a ready-made channel for
-  handing review notes back to an agent. Pinned goreleaser binary
-  (amd64+arm64, upstream checksums verified) baked into the image; palette
-  entry "review diff (revdiff)" on `r`; doctor checks the binary. Trial
-  status: if it holds up, its annotation output may eventually absorb the
-  vibe review verdict flow.
+  agent changed" surface. `v` toggles between the final file text and its
+  diff; annotations made during review print to stdout on quit — a
+  ready-made channel for handing review notes back to an agent. Pinned
+  goreleaser binary (amd64+arm64, upstream checksums verified) baked into
+  the image; palette entry "review diff (revdiff)" on `r` (runs with
+  `--untracked` so brand-new agent files show), or `vibe exec revdiff`
+  from any shell; doctor checks the binary. Deliberately NOT a top-level
+  `vibe` command while it's a trial — the command surface is ABI, and
+  revdiff gets a verb only if it earns harness logic of its own (e.g.
+  annotation capture feeding the agent). If the trial holds, its
+  annotations may eventually absorb the vibe review verdict flow.
 - **`vibe review` / the yazi surface is now locked read-only.** It was
   always meant as a viewing/reviewing surface; now the config enforces it:
   the harness keymap unbinds shell escape and every file operation

@@ -64,8 +64,10 @@ designed; entries here are one paragraph of intent, not a spec.
   only file manager that's provably lockable — broot/lazygit/gitui/mc/
   ranger/lf/nnn all failed the lock test, awesome-tmux sidebars are dead
   since 2022), and **revdiff** (umputun, pinned checksummed Go binary)
-  was adopted as `vibe diff` — the purpose-built read-only diff-review
-  TUI (content↔diff toggle, annotations to stdout). Trial: if revdiff
+  was adopted as the diff-review surface (palette `r` /
+  `vibe exec revdiff` — deliberately NOT a top-level command while a
+  trial: it gets a verb only if it earns harness logic like annotation
+  capture; content↔diff toggle, annotations to stdout). Trial: if revdiff
   holds up its annotation output may absorb the A/R verdict flow; the
   ~1-day yazi diff-toggle Lua plugin (existence proof:
   vscode-git-gutter.yazi on our exact 26.5.6) stays the fallback if
