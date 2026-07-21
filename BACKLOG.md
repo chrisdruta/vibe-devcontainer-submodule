@@ -438,8 +438,12 @@ designed; entries here are one paragraph of intent, not a spec.
   acceptance harness below ran GREEN against the REAL conf: solo
   no-strip, three-session render, five SGR color-branch asserts, live
   attention-flip propagation from an external client, auto-hide/show
-  cycle. The demand gate now covers only the choose-tree "switch
-  project" palette entry.**
+  cycle. The choose-tree "switch project" palette entry shipped right
+  after (`prefix+Space o`, `choose-tree -Zs`, live-sessions-only per
+  the picker decision) — E2E-verified by driving the palette chord
+  under the nested observer — so the SPACES HALF IS FULLY BUILT and
+  nothing remains demand-gated: the roblox two-project dogfood is now
+  validation, not a gate.**
   - *Placement*: `status-format[1]` + `status 2` in tmux-tui.conf. The
     line inherits `status-style` (do NOT lead with a bg token — every
     `#[default]` resets to status-style, so an explicit bg fragments).

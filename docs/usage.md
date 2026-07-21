@@ -155,17 +155,17 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 
 | Chord | Effect |
 | --- | --- |
-| `prefix Space` | palette: agent/codex/shell/services windows, git popup, doctor, detach/quit |
+| `prefix Space` | palette: agent/codex/shell/services windows, switch project, git popup, doctor, detach/quit |
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
 | `prefix r` | respawn a dead agent pane (it stays visible on exit) |
 | `prefix d` | detach — everything keeps running; `vibe tui` reattaches |
 | `prefix Q` | quit the UI session (asks first; agents keep running) |
-| `prefix R` | reload tmux-ui.conf |
+| `prefix R` | reload tmux-tui.conf |
 | `Alt+←→↑↓` / `Alt+1..9` | move between panes / windows, no prefix |
 
 Tabs are clickable (mouse is on), and the `+` at the right end of the status
-bar opens a new host window. The config lives at `src/config/tmux-ui.conf`
+bar opens a new host window. The config lives at `src/config/tmux-tui.conf`
 on its own socket — your personal `~/.tmux.conf` and default tmux server are
 never touched.
 
