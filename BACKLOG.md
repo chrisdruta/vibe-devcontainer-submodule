@@ -122,6 +122,44 @@ designed; entries here are one paragraph of intent, not a spec.
   per-WT-pane composition below described the retired vibe open world.)
   Under `vibe open agents`, each native pane carried its own
   tmux status bar, so the herdr glance emerged from composition.
+  **REVIEWED 2026-07-21 (codex gpt-5.6-sol adversarial pass): NOT
+  implementation-ready as written** — the design predates the tui pivot and
+  the deltas don't close it. The killer: there is NO event path from the
+  container hook to the HOST tmux server ("hook sets `@vibe_state`" targets
+  the inner server; a bind-mounted file the host can read but is never told
+  about cannot trigger a redraw under `status-interval 0` with `#()`
+  banned). Redesign direction (spike before committing): the **title
+  channel** — the hook updates inner-server state, inner tmux re-emits it
+  as an OSC title through the existing `docker exec` TTY (`set-titles` +
+  state-encoded `set-titles-string`), the outer pane's `pane_title` changes
+  (host `allow-rename off` blocks window renames, not pane-title OSC), and
+  the host's `pane-title-changed` hook renders dots/flash — event-driven,
+  no daemon, no bind mount, no host-socket sharing, and the agent→pane
+  mapping is intrinsic (the event arrives ON the owning pane; duplicate
+  attachments each get their own dot). This likely DROPS the
+  "state files bind-mounted host-readable" delta above: files stay
+  container-tmpfs for `vibe ps` only. Further review corrections now part
+  of the design: identity splits into `VIBE_AGENT_SESSION` (stable logical
+  name) + `VIBE_AGENT_INSTANCE` (unique per run; minted per process under
+  `DEV_AGENT_TMUX=0`), both passed via an `env` prefix in the ONE
+  agent-entry.sh cmd array so the `%q` and direct-exec paths can't diverge;
+  liveness is layered (process-exit dominates semantic state — an
+  agent-entry exit trap plus host `pane-died` hooks write it; outer-pane
+  death means "frontend gone", not "agent dead") replacing the
+  fresh-state > pane_dead > running chain, which let a stale `working`
+  outlive a dead agent; NO wall-clock TTL in the live contract (staleness
+  is evaluated only at read time — `vibe ps`, picker open, attach);
+  raw BEL is dropped as the blocked mechanism (hook stdout is captured by
+  Claude Code; nested bell propagation is unreliable) in favor of the host
+  hook setting monitor/alert state itself; hook semantics stay conservative
+  — `working/attention/idle/exited`, with `blocked` reserved for events
+  that reliably mean user intervention (Notification ≠ blocked,
+  Stop ≠ session done); and the settings-template hook blocks need an
+  idempotent merge story (`vibe update`), not "consumers merge on pin
+  bump" hand-waving — until then the feature is fresh-installs-only.
+  Standing guardrail restated: inner tmux gets NO dashboard logic (≤5-line
+  budget), host tmux renders only pushed precomputed state, hookless
+  agents stay `running/exited`.
 
 - **Productize worktrees.** Today parallel worktrees work but are manual:
   a differently-named worktree directory gets its own `agent-state-<basename>`
@@ -133,7 +171,16 @@ designed; entries here are one paragraph of intent, not a spec.
   Constraint: the `agent-state-<workspace-basename>` default derivation is
   ABI (AGENTS.md) — sharing happens by writing an explicit `source=`, never
   by changing the derivation. Scheduled with the vibe tui spaces phase
-  (worktrees are the natural in-project "spaces").
+  (worktrees are the natural in-project "spaces"). 2026-07-21 sol-review
+  addition: a command CONTRACT must be written before coding — branch
+  create vs attach, worktree placement/naming/collisions, whether `.vibe`
+  config is inherited or regenerated, whether the shared-state choice edits
+  committed compose.yaml or a local override, what `remove` does to running
+  containers and host tmux sessions, and dirty/unmerged refusal rules.
+  Hard lines already settled: state sharing is NEVER inferred from
+  repository relationship (explicit `source=` opt-in only, recorded as
+  project-owned config), and removal never deletes agent-state volumes
+  automatically.
 
 - **Decision records from the 2026-07-20 external design review** (so future
   reviews don't relitigate): **REJECTED — session-backend abstraction**
@@ -278,3 +325,28 @@ designed; entries here are one paragraph of intent, not a spec.
   name) — repo rename + v1.0 cut remain an explicit release decision for
   Chris; GitHub auto-redirects old clone/submodule URLs, so consumer
   pins survive the rename.
+
+- **Open decisions from the 2026-07-21 phase-2 sol review (codex
+  gpt-5.6-sol; spaces side — must be settled before the spaces phase is
+  coded).** The agent-state corrections are folded into that item above;
+  these are the rest. (1) **Shared-server config ownership**: the first
+  project to start `-L vibe` wins, `VIBE_TUI_CONF` is server-global and the
+  last launcher overwrites it, so prefix+R can reload project A's pinned
+  conf over project B's sessions — decide between a host-installed
+  versioned tui conf (install-tmux.sh already exists as the vehicle) or
+  first-owner-authoritative with a version-skew warning; until decided,
+  the mutable global-reload path is the bug surface. (2) **Project
+  registry**: `choose-tree` only shows live sessions and discovers
+  nothing; a real picker needs a registry keyed by `.vibe/.project-id`
+  (canonical path, display name, last-seen), registered on `vibe tui`,
+  pruned user-triggered (no polling). Specify picker rows/actions (live
+  session, dormant checkout, missing path, create/switch/close) BEFORE
+  choosing choose-tree vs fzf — choose-tree suffices only if
+  live-sessions-only is accepted. (3) **Launcher decomposition**: tui.sh
+  currently refuses to run with `$TMUX` set; the picker needs idempotent
+  ensure-session / attach / switch-client / list operations split out.
+  (4) **Status-line-2 agents strip**: needs a static format spec (ordering,
+  truncation, narrow widths, dead agents) — and note a CROSS-PROJECT strip
+  contradicts the accepted "no fleet view" ledger line; scope it to the
+  current project unless that ledger entry is deliberately superseded
+  (Chris's call, not a side effect).
