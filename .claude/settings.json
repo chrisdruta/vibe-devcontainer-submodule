@@ -16,12 +16,26 @@
     ]
   },
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" SessionStart"
+          }
+        ]
+      }
+    ],
     "UserPromptSubmit": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/preview-image-hook.sh\""
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" UserPromptSubmit"
           }
         ]
       }
@@ -33,6 +47,44 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/preview-image-hook.sh\""
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" PostToolUse"
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" Notification"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" Stop"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PROJECT_DIR}/.vibe/harness/src/scripts/agent-state-hook.sh\" SessionEnd"
           }
         ]
       }

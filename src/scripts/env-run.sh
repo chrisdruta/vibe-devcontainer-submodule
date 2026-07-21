@@ -20,4 +20,15 @@ if [[ -f "$env_path" ]]; then
   set +a
 fi
 
-exec "$@"
+# Agent runs (identity minted by agent-entry.sh) trade the zero-cost exec
+# for a wrapper that records process death: the one transition no Claude
+# hook can report, and the liveness layer that dominates semantic state
+# (BACKLOG "agent state at a glance"). EXIT fires on errexit and on
+# trappable signals too; the explicit exit keeps the agent's code.
+if [[ -n "${VIBE_AGENT_INSTANCE:-}" ]]; then
+  # shellcheck disable=SC2154  # rc is assigned inside the single-quoted trap
+  trap 'rc=$?; VIBE_AGENT_EXIT=$rc bash "$script_dir/agent-state-hook.sh" __exit </dev/null >/dev/null 2>&1 || true; exit $rc' EXIT
+  "$@"
+else
+  exec "$@"
+fi
