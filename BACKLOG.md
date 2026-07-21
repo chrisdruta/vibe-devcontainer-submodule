@@ -71,7 +71,37 @@ designed; entries here are one paragraph of intent, not a spec.
   terminal is found (that fallback IS the macOS story for now). A prototype
   with hardcoded layouts shipped 2026-07-20; graduation means config-driven
   layouts (project-declared panes) and, only after that stabilizes, maybe
-  other frontends (WezTerm — see decision record below).
+  other frontends (WezTerm — see decision record below). Config format decided
+  2026-07-21: an optional `.vibe/open-layouts.conf` line-DSL (`layout NAME` /
+  `pane` / `split V|H [SIZE]` / `tab`; everything after the op is a `./vibe`
+  command line), parsed adapter-neutrally in `open-terminal.sh`
+  (parse_layout → emit_wt / emit_fallback, bash-3.2-safe). Built-in layouts
+  remain the fallback, so the file is optional and install.sh seeds nothing;
+  a WezTerm adapter later is one more `emit_*` function.
+
+- **Agent state at a glance — PLANNED post-v1.0 (designed 2026-07-21).** The
+  herdr headline ("every agent: blocked/working/done") built from machinery we
+  already own — hooks, not scraping, no daemon, no polling. A
+  `src/scripts/agent-state-hook.sh` (same contract as the preview hook)
+  maps Claude Code events (SessionStart/UserPromptSubmit/Notification/Stop/
+  SessionEnd) to `idle/working/blocked/done`, written atomically to
+  `${XDG_RUNTIME_DIR:-/tmp}/vibe-agent-state-$(id -u)/<session>` (runtime
+  tmpfs only — never the workspace or the agent-state volume) plus
+  `tmux set-option @vibe_state` (event-driven status redraw) and a BEL on
+  `blocked` (native tab flash under `vibe open`). Identity rides inside the
+  pane command (`env VIBE_AGENT_SESSION=$session` prefixed at the
+  agent-entry.sh cmd array), surviving the `%q` re-quote and covering
+  `DEV_AGENT_TMUX=0`. `vibe ps` (baked `src/scripts/ps.sh`) renders the
+  glance: agent sessions (naming convention `agent(-cmd)(-cold)` joined with
+  state files; precedence fresh-state > pane_dead > running) plus the
+  services-session windows per svc.sh's model. Hookless agents (grok) cap
+  deliberately at `running/exited` + activity age. Registration is new hook
+  blocks in `src/templates/claude-settings.json` (consumers merge on pin
+  bump, same story as the preview hook). tmux.conf budget: ≤5 lines.
+  Sequencing: this (A) → `vibe open` layout graduation (B) → opt-in Codex
+  `notify` turn-complete seed (C, only after A proves out); A and B touch
+  disjoint files. Under `vibe open agents`, each native pane carries its own
+  tmux status bar, so the herdr glance emerges from composition.
 
 - **Productize worktrees.** Today parallel worktrees work but are manual:
   a differently-named worktree directory gets its own `agent-state-<basename>`
@@ -97,3 +127,48 @@ designed; entries here are one paragraph of intent, not a spec.
   a base-image digest pin, not a lockfile subsystem. **NOT NOW — WezTerm
   frontend**: revisit only as another `vibe open` adapter once layouts are
   config-driven.
+
+- **Decision records from the 2026-07-21 terminal-UX review** (herdr
+  comparison; so future "should we own the multiplexer?" rounds don't
+  relitigate): **REJECTED — own terminal multiplexer (shell or Rust).**
+  Sizing herdr (the best-in-class agent mux): ~193K LoC of Rust, and the
+  genuinely hard core is vendored, not written (Ghostty `libghostty-vt` VT
+  emulation, `portable-pty`); its hand-rolled ~20K LoC daemon/wire-protocol/
+  snapshot layer buys detach/reattach that tmux gives us free. A shell
+  multiplexer is definitionally impossible — PTY allocation plus a VT state
+  machine is not expressible in shell; that program is tmux. No revisit
+  trigger: if agent *orchestration* is ever wanted, run an orchestrator (or
+  herdr itself) inside the container instead of growing one.
+  **REJECTED — tmux as the one true UI** (heavy tmux-as-frontend
+  customization). Image review renders best outside tmux; the `vibe open`
+  thesis (terminal owns layout, tmux owns persistence) stands. tmux.conf
+  stays minimal: no status-format dashboards, no popup farms, no
+  `status-interval` polling — `vibe ps` is the dashboard.
+  **Renderer-agnostic note:** the in-tmux image constraint is tmux's
+  graphics *compositor*, not the emitting library — timg/chafa/img2sixel/
+  yazi all emit the same sixel/kitty/iTerm2 sequences, and tmux ingests but
+  does not reliably re-emit sixel on redraw (tmux #4499/#4639/#5126), which
+  is exactly the "agent TUI redrawing in one pane, image in the split next
+  to it" case. Swapping renderers changes nothing inside tmux. Nor does
+  upgrading tmux (checked 2026-07-21): we ship Debian stable's 3.5a-3 via
+  apt — never pinned — and while 3.6/3.7 (3.7b released 2026-07-01) landed
+  sixel improvements, the redraw-artifact issue #5126 is still open on 3.6b
+  and next-3.7 regressed sixel persistence differently; a source build
+  would buy churn, not the unlock. The devcontainer boundary is a non-issue
+  (escapes pass through the `docker exec` TTY; DA1 probing already bails
+  under `$TMUX` in preview-lib.sh).
+  **NOT NOW — kitty-graphics Unicode-placeholder path.** The one real
+  unlock for images-in-a-tmux-split: kitty-protocol placeholders anchor
+  images to cells and survive multiplexer redraws, but the *outer* terminal
+  must speak kitty graphics (kitty/WezTerm/ghostty — not Windows Terminal,
+  which is sixel-only). Revisit trigger: when the WezTerm `vibe open`
+  adapter lands, test `chafa -f kitty --passthrough tmux` (needs chafa
+  ≥1.16 for placeholders; the 1.14.5 pin is already flagged too old in the
+  preview stack) and if solid, the tmux review window may become a split on
+  kitty-capable terminals.
+  **Accepted ledger — what this path permanently cedes vs herdr:** one
+  unified live dashboard of agent screens, a programmatic agent socket API
+  (spawn/read/wait), real state fidelity for hookless agents, a
+  cross-project fleet view, and dashboard-coupled worktrees. The trade: we
+  keep ~2K LoC of bash and take the herdr headline (state at a glance,
+  attention on blocked), not the herdr platform.
