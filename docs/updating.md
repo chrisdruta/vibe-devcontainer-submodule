@@ -141,7 +141,7 @@ an agent. Steps 1–2 are `vibe update` (in-container:
 judgment. Paste into an agent at the project root:
 
 ```text
-Update this project's vibe-devcontainer-submodule harness pin and reconcile
+Update this project's vibe-tui-box harness pin and reconcile
 the project-owned files with the new version.
 
 1. In the harness submodule (.vibe/harness, or .devcontainer/harness on the

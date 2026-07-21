@@ -1,11 +1,14 @@
-# vibe-devcontainer-submodule
+# vibe-tui-box 🥡
+
+*Vibe coding in a box — a riced tmux TUI on a secure, isolated devcontainer chassis.*
 
 <p align="center">
   <img src="assets/header.svg" alt="An apple and a window carrying the same shipping container; a Linux penguin peeks out of the door" width="760">
 </p>
 
 A reusable, isolated development environment for running coding agents inside your
-project's toolchain on Windows + WSL2 or macOS. Claude Code by default; Codex and
+project's toolchain on Windows + WSL2 or macOS — with `vibe tui`, a themed
+host-side tmux, as the one surface you live in. Claude Code by default; Codex and
 Grok Build opt-in. Distributed as a **git submodule**, so every project picks up
 harness improvements from one place while keeping its own thin configuration.
 The engine is plain **docker compose + docker exec** driven by the `vibe`
@@ -70,7 +73,7 @@ Full threat model: [docs/security.md](docs/security.md).
 From the top level of your project's git repository:
 
 ```bash
-git submodule add https://github.com/chrisdruta/vibe-devcontainer-submodule.git .vibe/harness
+git submodule add https://github.com/chrisdruta/vibe-tui-box.git .vibe/harness
 .vibe/harness/install.sh
 ```
 

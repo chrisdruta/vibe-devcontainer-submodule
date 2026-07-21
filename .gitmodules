@@ -1,5 +1,5 @@
 [submodule ".vibe/harness"]
 	path = .vibe/harness
-	url = https://github.com/chrisdruta/vibe-devcontainer-submodule.git
+	url = https://github.com/chrisdruta/vibe-tui-box.git
 	branch = main
 	update = none

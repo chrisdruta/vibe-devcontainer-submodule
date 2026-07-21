@@ -10,14 +10,20 @@ designed; entries here are one paragraph of intent, not a spec.
   gone (see CHANGELOG Unreleased). Remaining from this item graduated to
   its own entry below: renaming the repository.
 
-- **Rename the repository — SCHEDULED pre-v1.0 (decided 2026-07-20).** The `-devcontainer-` in
-  `vibe-devcontainer-submodule` no longer describes the project post-engine-swap
-  (candidate: `vibe-harness`). GitHub redirects old clone/submodule URLs
-  indefinitely, so existing consumers keep working, but the name is embedded in
-  places a redirect doesn't fix: the `install.sh` submodule-add URL and help
-  text, README title/badges, seeded docs, and the onboarding prompt. Do it as
-  its own release — ideally before v1.0 while the consumer count is small — and
-  walk known consumers' `.gitmodules` URLs forward afterwards. Explicitly out of
+- **Rename the repository — RESOLVED 2026-07-21: `vibe-tui-box`.** Chose the
+  name with the TUI pivot settled (earlier candidate `vibe-harness` predated
+  the TUI being the headline): keeps Chris's `vibe-tui` identity, suffixes a
+  MECHANISM noun (box = sandbox/container/TUI box-drawing — and the chop-suey
+  takeout box is the brand story), never a virtue adjective ("secure-vibe-tui"
+  rejected: compound reads as a fork, unfalsifiable claim in a name ages
+  badly; the GitHub description carries the security claim instead, right
+  next to the name). CLI stays `vibe`. Harness-side references flipped in
+  this commit (install.sh, README, seeded docs, .gitmodules); the GitHub
+  rename itself is Chris's (container gh token has no admin scope — the
+  blast-radius model working as designed). GitHub redirects old
+  clone/submodule URLs indefinitely; walk known consumers' `.gitmodules`
+  URLs forward at their next pin bump. v1.0 cut remains separate and
+  pending. Explicitly out of
   scope (decided 2026-07-20): renaming the in-container `vscode` user — it comes
   from the devcontainers base images and is load-bearing ABI (extension
   `USER vscode` contract, `/home/vscode/.agents` paths).

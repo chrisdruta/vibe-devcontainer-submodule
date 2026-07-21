@@ -17,7 +17,7 @@
 From the top level of the project repository:
 
 ```bash
-git submodule add https://github.com/chrisdruta/vibe-devcontainer-submodule.git .vibe/harness
+git submodule add https://github.com/chrisdruta/vibe-tui-box.git .vibe/harness
 .vibe/harness/install.sh
 ```
 
@@ -55,10 +55,10 @@ reinstalling.
 Handy when setting up many projects, or when developing the harness itself:
 
 ```bash
-git clone https://github.com/chrisdruta/vibe-devcontainer-submodule.git \
-  ~/dev/vibe-devcontainer-submodule
+git clone https://github.com/chrisdruta/vibe-tui-box.git \
+  ~/dev/vibe-tui-box
 
-~/dev/vibe-devcontainer-submodule/install.sh --preset python ~/dev/my-project
+~/dev/vibe-tui-box/install.sh --preset python ~/dev/my-project
 ```
 
 Same result; the installer adds the submodule itself (from the clone's
@@ -82,7 +82,7 @@ If the scaffold clone has no `origin` remote (e.g. you are hacking on a local co
 its local path is used as the submodule URL; switch later with:
 
 ```bash
-git submodule set-url .vibe/harness https://github.com/chrisdruta/vibe-devcontainer-submodule.git
+git submodule set-url .vibe/harness https://github.com/chrisdruta/vibe-tui-box.git
 ```
 
 ## First start

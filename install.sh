@@ -16,11 +16,11 @@ Two ways to run it:
 
   submodule-first (no separate clone; TARGET is implied):
     cd my-project
-    git submodule add https://github.com/chrisdruta/vibe-devcontainer-submodule.git .vibe/harness
+    git submodule add https://github.com/chrisdruta/vibe-tui-box.git .vibe/harness
     .vibe/harness/install.sh
 
   from a scaffold clone (handy for many projects / harness development):
-    ~/dev/vibe-devcontainer-submodule/install.sh --preset python ~/dev/my-project
+    ~/dev/vibe-tui-box/install.sh --preset python ~/dev/my-project
 
 With no arguments on a terminal it runs an interactive interview (preset,
 optional extras, confirmation); any argument switches to plain flag mode.

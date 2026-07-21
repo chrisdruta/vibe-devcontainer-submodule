@@ -52,8 +52,8 @@ submodule-first, so nothing is fetched outside the project and the installer
 runs non-interactively via flags:
 
 ```text
-Onboard this repository onto the vibe-devcontainer-submodule harness
-(https://github.com/chrisdruta/vibe-devcontainer-submodule) and reconcile it
+Onboard this repository onto the vibe-tui-box harness
+(https://github.com/chrisdruta/vibe-tui-box) and reconcile it
 with the project.
 
 1. Inspect the repo (lockfiles, README setup steps, any existing container
@@ -63,7 +63,7 @@ with the project.
    harness layout, follow the harness docs/updating.md -> "Migrating to the
    compose engine" instead of steps 2-3.
 2. Run, from the repository top level:
-   git submodule add https://github.com/chrisdruta/vibe-devcontainer-submodule.git .vibe/harness
+   git submodule add https://github.com/chrisdruta/vibe-tui-box.git .vibe/harness
    .vibe/harness/install.sh --preset <preset> [--extras <list>]
 3. Reconcile .vibe/compose.yaml build args with the toolchain
    (INSTALL_NODE, INSTALL_BUN, ...) and migrate anything still valuable from
