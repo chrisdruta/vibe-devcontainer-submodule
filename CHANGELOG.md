@@ -5,6 +5,21 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **New: cross-project agents strip in `vibe tui` (host-side, no
+  rebuild).** While a second project session exists on the `vibe` socket,
+  a second status line lists every project with its agents' state dots —
+  the same glyph vocabulary as the tabs (`●` working/idle by color, `✗`
+  exited, `◌` frontend-dead), with attention rendered as a coral dot
+  (on tabs the attention dot deliberately blends into the flashing tab
+  background; the strip has no flashing background). Render-only, fully
+  event-driven (agent hook events redraw it across sessions; session
+  create/kill is nudged by `session-created`/`session-closed` hooks —
+  still no polling anywhere), current project bold, names truncated at
+  12, and it auto-hides when only one project is running, so the
+  solo-project UI is unchanged. The conf no longer sets `status on`
+  explicitly (the hooks own the line count; an explicit set would have
+  collapsed the strip on every prefix+R reload). Load with prefix+R or
+  `vibe tui --fresh`.
 - **`vibe tui` conf ownership is now first-owner-authoritative (host-side,
   no rebuild).** The UI server is styled by whichever project starts it
   (tmux applies `-f` at server start only), but every later launch used to

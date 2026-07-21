@@ -430,8 +430,16 @@ designed; entries here are one paragraph of intent, not a spec.
   the new and killed session immediately in the spike.
   **STRIP FORMAT SPEC (2026-07-21, scratch-validated end-to-end — the
   format string below rendered correctly under a nested observer:
-  colors, branches, truncation, auto-show; only CODING remains and it
-  stays demand-gated):**
+  colors, branches, truncation, auto-show). SHIPPED same day (Chris
+  lifted the gate for the strip): tmux-tui.conf `status-format[1]` +
+  `session-created`/`session-closed` hooks, and the conf's explicit
+  `set -g status on` removed (hooks own the line count; the explicit
+  set would have collapsed the strip on every prefix+R reload). The
+  acceptance harness below ran GREEN against the REAL conf: solo
+  no-strip, three-session render, five SGR color-branch asserts, live
+  attention-flip propagation from an external client, auto-hide/show
+  cycle. The demand gate now covers only the choose-tree "switch
+  project" palette entry.**
   - *Placement*: `status-format[1]` + `status 2` in tmux-tui.conf. The
     line inherits `status-style` (do NOT lead with a bg token — every
     `#[default]` resets to status-style, so an explicit bg fragments).
