@@ -85,12 +85,21 @@ if [ "$cold" = "1" ]; then
   session="$session-cold"
 fi
 
+# Identity for the agent-state hook (BACKLOG "agent state at a glance"):
+# SESSION is the stable logical name, INSTANCE is unique per run so a
+# restarted agent can never inherit a previous run's state records. The
+# `env` prefix lives inside the ONE cmd array, so the tmux %q path and the
+# direct-exec path below cannot disagree; on -A reattach the fresh mint is
+# discarded with the unused command string and the pane's original run
+# keeps its identity — that run is what the state records describe.
+cmd=(env "VIBE_AGENT_SESSION=$session" "VIBE_AGENT_INSTANCE=$$.$(date +%s)")
+
 # With DEV_AGENT_TMUX=1 the agent runs inside a tmux session: it survives a
 # dropped terminal, and a second `vibe agent` reattaches (-A) instead of
 # double-launching. `.env` still loads only inside the pane process via
 # env-run.sh — never into the tmux server or an interactive shell. tmux takes
 # the pane command as a shell string, hence the one remaining %q re-quote.
-cmd=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
+cmd+=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
 if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
   # Under `vibe tui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
   # already draws tabs and chrome — drop this inner session's status bar so
