@@ -89,7 +89,10 @@ Commands:
               (SESSION argument > DEV_ATTACH_TMUX_SESSION > "services")
   agent       Run the configured default agent with explicit .env loading
               (--cold: skip CLAUDE.md/AGENTS.md and .claude customizations;
-               -a/--agent CMD: run CMD instead of DEV_AGENT_CMD, e.g. -a codex)
+               -a/--agent CMD: run CMD instead of DEV_AGENT_CMD, e.g. -a codex;
+               -s/--session NAME: parallel instance in its own session
+               agent-NAME — without it a second `vibe agent` reattaches
+               the running one)
   run         Run any command with explicit .env loading (e.g. vibe run grok)
   ps          Agents & services at a glance: state, liveness, age
   doctor      Check the active environment
