@@ -116,8 +116,11 @@ the terminal is just a fullscreen window. Container tmux sessions keep
 persistence underneath — the agent pane is `./vibe agent` attaching to
 session `agent`, so closing the terminal (or the laptop lid) never loses
 work. One surface holds agent panes AND native host shells (host-side git,
-`vibe clip`), works in any terminal on any OS, and is where the
-multi-project "spaces" view will grow.
+`vibe clip`) and works in any terminal on any OS. It scales to several
+projects as sessions, not dashboards: each project's `vibe tui` is its own
+session on the shared `vibe` socket, so moving between projects is a tmux
+session switch. There is no cross-project fleet view — that is a recorded
+non-goal (see [positioning.md](positioning.md)).
 
 ```bash
 ./vibe tui    # session per project on the dedicated "vibe" tmux socket:

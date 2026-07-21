@@ -37,6 +37,17 @@ anything that *drives* the agent — loops, schedulers, task state machines,
 multi-agent review pipelines — belongs to layers 1–2 and is a non-goal;
 project skills may build such flows *on top of* these affordances.
 
+The bundled TUI (`vibe tui`) sits on the layer-3 side of that line: a
+host-side tmux cockpit for the project you are running — agent pane, host
+shell, palette verbs (review, doctor, clip). It *renders* state the agent's
+own hooks push out (tab dots via the title channel) and never drives the
+agent: no scheduler, no task queue, no spawn/wait API. Several projects are
+several sessions on one tmux socket — switching, not fleet management.
+Deliberately ceded to orchestrator-class tools, recorded here so reviews
+don't relitigate it: a unified live dashboard of agent screens, a
+programmatic agent-control API, state fidelity for hookless agents, a
+cross-project fleet view, and dashboard-coupled worktrees.
+
 ## Principles
 
 - **Isolate trust, not just work.** One container per project: non-root, all
@@ -57,7 +68,9 @@ project skills may build such flows *on top of* these affordances.
 
 ## Non-goals
 
-- No orchestration UI, scheduler, or fleet manager.
+- No orchestration UI, scheduler, or fleet manager (`vibe tui` is a
+  per-project cockpit rendering pushed state — the ceded ledger above marks
+  the boundary).
 - No first-party agent loop or model API client.
 - No centralized credential store, auth broker, or token proxy.
 - No bind-mounting host credentials (`~/.claude`, SSH keys, keychains) into
