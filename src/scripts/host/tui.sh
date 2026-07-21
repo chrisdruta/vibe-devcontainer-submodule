@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# `vibe ui` — the riced host-side tmux UI. One tmux server on a dedicated
+# `vibe tui` — the riced host-side tmux UI. One tmux server on a dedicated
 # socket (-L vibe) for all vibe projects on this host; one session per
 # project. The default layout is the pre-`vibe open` workflow folded into
 # one surface: agent pane (docker exec -> container tmux, persistence as
@@ -12,8 +12,8 @@
 set -euo pipefail
 
 if [ "$#" -lt 4 ]; then
-  echo "Usage: ui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME" >&2
-  echo "(normally invoked via: vibe ui)" >&2
+  echo "Usage: tui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME" >&2
+  echo "(normally invoked via: vibe tui)" >&2
   exit 2
 fi
 repo_root="$1"
@@ -22,17 +22,17 @@ harness_dir="$3"
 project_name="$4"
 
 socket="vibe"
-conf="$harness_dir/src/config/tmux-ui.conf"
-tmux_bin="${VIBE_UI_TMUX:-tmux}"
+conf="$harness_dir/src/config/tmux-tui.conf"
+tmux_bin="${VIBE_TUI_TMUX:-tmux}"
 
 if [ -n "${TMUX:-}" ]; then
-  echo "vibe ui hosts its own tmux — run it from a plain terminal." >&2
+  echo "vibe tui hosts its own tmux — run it from a plain terminal." >&2
   echo "(already on the vibe socket? switch with: tmux -L vibe switch-client -t <session>)" >&2
   exit 1
 fi
 
 if ! command -v "$tmux_bin" >/dev/null 2>&1; then
-  echo "vibe ui needs tmux on the host. Install the pinned 3.7b build:" >&2
+  echo "vibe tui needs tmux on the host. Install the pinned 3.7b build:" >&2
   echo "  bash $harness_dir/src/scripts/host/install-tmux.sh" >&2
   echo "(a distro tmux >= 3.4 also works, but sixel image previews degrade below 3.7)" >&2
   exit 1
@@ -53,7 +53,7 @@ case "$minor" in
   '' | *[!0-9]*) minor=0 ;;
 esac
 if [ "$major" -lt 3 ] || { [ "$major" -eq 3 ] && [ "$minor" -lt 4 ]; }; then
-  echo "Host tmux is $raw_version; vibe ui needs >= 3.4 (styles with formats)." >&2
+  echo "Host tmux is $raw_version; vibe tui needs >= 3.4 (styles with formats)." >&2
   echo "Install the pinned build: bash $harness_dir/src/scripts/host/install-tmux.sh" >&2
   exit 1
 fi
@@ -74,14 +74,14 @@ server_probe="$("$tmux_bin" -L "$socket" display-message -p '#{version}' 2>&1)" 
 case "$server_probe" in
   "" | *"no server"* | *"error connecting"*) ;; # no server yet: fresh start below
   *"protocol version mismatch"*)
-    echo "The running vibe ui server was started by an incompatible tmux." >&2
+    echo "The running vibe tui server was started by an incompatible tmux." >&2
     echo "Kill it with the binary that started it (usually the distro one):" >&2
     echo "  /usr/bin/tmux -L $socket kill-server   (container agent sessions are unaffected)" >&2
     exit 1
     ;;
   *)
     if [ "$server_probe" != "$raw_version" ]; then
-      echo "vibe ui: running server is tmux $server_probe, your binary is $raw_version —" >&2
+      echo "vibe tui: running server is tmux $server_probe, your binary is $raw_version —" >&2
       echo "the old server keeps serving until it exits. To pick up the new one:" >&2
       echo "  tmux -L $socket kill-server   (container agent sessions are unaffected)" >&2
     fi
@@ -142,7 +142,7 @@ if ! vtmux has-session -t "$session" 2>/dev/null; then
   # status bar off so only this server draws chrome.
   vtmux new-session -d -s "$session" -c "$repo_root" -e VIBE_NESTED=1 -n main "./vibe agent"
   # For the prefix+R reload binding.
-  vtmux set-environment -g VIBE_UI_CONF "$conf"
+  vtmux set-environment -g VIBE_TUI_CONF "$conf"
 
   agent_pane="$(vtmux display-message -p -t "$session:main" '#{pane_id}')"
   vtmux set-option -p -t "$agent_pane" @vibe_role "agent"

@@ -26,7 +26,7 @@ thing) — or as plain `vibe` with the [global install](#global-install) below:
 | `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 | `show [PATH]` | Preview an image in the terminal via sixel (default: newest `vibe clip` capture) |
 | `review [DIR]` | Browse/review images with yazi (verdict keys, badges — below)       |
-| `open [LAYOUT]` | Open the workspace as native terminal panes, each running one vibe command (Windows Terminal; elsewhere prints the commands to run manually) |
+| `tui`       | The workspace as a riced host-side tmux — agent pane, host shell pane, tabs, palette ([below](#the-tui-vibe-tui)) |
 
 The launcher drives docker directly: `docker compose` for the container
 lifecycle (the harness base compose file with the project's
@@ -79,8 +79,8 @@ tmux
 # pane 1: claude    pane 2: codex    pane 3: grok
 ```
 
-— or skip the tmux panes and let your terminal own the layout: see
-[Native panes](#native-panes-vibe-open).
+— or get the whole thing as one themed surface: see
+[The TUI](#the-tui-vibe-tui).
 
 ## Cold sessions (fresh perspective)
 
@@ -109,72 +109,35 @@ With `DEV_AGENT_TMUX=1` each variant uses its own tmux session — `agent`,
 `agent-cold`, `agent-codex`, `agent-codex-cold` — so runs never reattach to the
 wrong session and can happily run side by side.
 
-## Native panes (`vibe open`)
+## The TUI (`vibe tui`)
 
-Those per-variant sessions enable a second workflow: let your **terminal** own
-the layout and keep tmux for persistence only. Each native pane runs one
-single-purpose command and attaches to its own session in the container:
-
-```bash
-# any terminal's split feature; one command per pane
-./vibe agent              # claude — session "agent"
-./vibe agent -a codex     # codex  — session "agent-codex"
-./vibe review             # yazi image review, rendered by the terminal itself
-./vibe shell              # plain shell
-```
-
-Closing the terminal (or the laptop lid) loses the layout, not the work — the
-sessions keep running in the container, and reopening the panes reattaches.
-`vibe review` in its own native pane is the best-rendered review surface:
-yazi talks sixel directly to the terminal, none of the tmux caveats apply.
-
-`vibe open` automates the layout on Windows Terminal (≥ 1.22 for sixel in the
-review pane):
+The front door: a **host-side tmux** owns the layout, tabs, and theme, and
+the terminal is just a fullscreen window. Container tmux sessions keep
+persistence underneath — the agent pane is `./vibe agent` attaching to
+session `agent`, so closing the terminal (or the laptop lid) never loses
+work. One surface holds agent panes AND native host shells (host-side git,
+`vibe clip`), works in any terminal on any OS, and is where the
+multi-project "spaces" view will grow.
 
 ```bash
-./vibe open            # agent (left, 70%) | shell / review (right column)
-./vibe open agents     # claude | codex, half and half
-./vibe open tabs       # tab 1: agent full-screen; tab 2: shell / review
-                       # (best on portrait monitors — Ctrl+Tab is the toggle)
-```
-
-Prefer one layout as *your* default? `export VIBE_OPEN_LAYOUT=tabs` in the
-host `~/.bashrc` and plain `./vibe open` opens it — an explicit argument
-still wins.
-
-Panes adopt the Windows Terminal profile named after your WSL distro
-(`WSL_DISTRO_NAME`), so your distro's color scheme and font apply — without
-`-p`, wt would render commandline panes with the *default* profile's looks
-instead. `vibe open` prints which profile it pinned. **Wrong colors?** That
-printed name doesn't match the profile you actually theme: distros often
-register as `Ubuntu-24.04` while the themed profile is plain `Ubuntu`, or
-the distro-named profile is an auto-generated one still on default colors
-(wt silently falls back to the default profile's looks when the `-p` name
-matches nothing). Check the profile list in WT Settings for the real name,
-then pin it on the host — `export VIBE_OPEN_PROFILE="Ubuntu"` in your WSL
-`~/.bashrc` (set it empty to skip profile selection entirely).
-
-## One-surface tmux UI (`vibe ui`)
-
-`vibe open`'s inverse: a **host-side tmux** owns the layout, tabs, and theme,
-and the terminal is just a fullscreen window. The same container tmux
-sessions keep persistence underneath — an agent pane is still `./vibe agent`
-attaching to session `agent`. What you gain over `vibe open`: native HOST
-panes in the same surface (host-side git, `vibe clip`) instead of a separate
-terminal tab, layouts that work in any terminal (macOS included, no wt.exe),
-and one place to grow the multi-project "spaces" view later.
-
-```bash
-./vibe ui     # session per project on the dedicated "vibe" tmux socket:
+./vibe tui    # session per project on the dedicated "vibe" tmux socket:
               # agent pane (70%) | host shell pane, tabs across the top
 ```
+
+(The per-pane commands compose manually too — `./vibe agent`,
+`./vibe shell`, `./vibe review` each attach to their own container session
+from any terminal split. That was the retired `vibe open` workflow; the
+commands remain first-class, only the wt.exe layout automation is gone.
+`vibe review` in a plain terminal pane outside the TUI remains the
+best-rendered image-review surface: yazi talks sixel directly to the
+terminal.)
 
 Needs tmux ≥ 3.4 on the host; below 3.7, `vibe show` images don't survive
 pane redraws. The pinned 3.7b `--enable-sixel` build (same recipe as the
 container's) installs to `~/.local` with:
 
 ```bash
-bash .vibe/harness/src/scripts/host/install-tmux.sh   # VIBE_UI_TMUX=... to point elsewhere
+bash .vibe/harness/src/scripts/host/install-tmux.sh   # VIBE_TUI_TMUX=... to point elsewhere
 ```
 
 Keys (prefix is **Ctrl+Space**, with **Ctrl+a** as a full equivalent for
@@ -182,7 +145,7 @@ setups where an IME owns Ctrl+Space; double-tap Ctrl+a to send a literal
 one through. The inner agent session keeps its own `Ctrl+b`, so in-agent
 habits still work. If NO chord works, the socket is likely serving a
 stale or conf-less server — check `tmux -L vibe show -g prefix2` (expect
-`C-a`) and reset with `tmux -L vibe kill-server` + `vibe ui`. Windows
+`C-a`) and reset with `tmux -L vibe kill-server` + `vibe tui`. Windows
 Terminal swallows `Alt+arrows` for its own pane-focus bindings — unbind
 them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 
@@ -192,7 +155,7 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
 | `prefix r` | respawn a dead agent pane (it stays visible on exit) |
-| `prefix d` | detach — everything keeps running; `vibe ui` reattaches |
+| `prefix d` | detach — everything keeps running; `vibe tui` reattaches |
 | `prefix Q` | quit the UI session (asks first; agents keep running) |
 | `prefix R` | reload tmux-ui.conf |
 | `Alt+←→↑↓` / `Alt+1..9` | move between panes / windows, no prefix |
@@ -204,7 +167,7 @@ never touched.
 
 **Leaving the UI:** closing the terminal window is just a detach (same as
 `prefix d`) — the layout and every pane keep running, and the next
-`./vibe ui` reattaches, respawning the agent pane if it died in the
+`./vibe tui` reattaches, respawning the agent pane if it died in the
 meantime. `prefix Q` closes the UI session for real; container agent
 sessions survive either way — the UI never owns your work. One upgrade
 gotcha: a *running* UI server pins the tmux binary it was started with, so
@@ -341,8 +304,8 @@ seeded `.claude/settings.json` (from `src/templates/claude-settings.json`) fire
 when you submit a prompt containing an image path and whenever the agent
 `Read`s an image file. Delivery targets, in order:
 
-1. **A live `vibe review`** (most recently launched — e.g. your native
-   review pane from `vibe open`): the image path arrives over DDS as a
+1. **A live `vibe review`** (most recently launched — e.g. in its own
+   plain terminal pane): the image path arrives over DDS as a
    toast — "Agent image: … — `g i` jumps to it". Deliberately no
    auto-reveal: nothing moves your cursor or cwd while you're browsing;
    `g i` jumps to the last agent image only when you ask.

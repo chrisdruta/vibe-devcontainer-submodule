@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Build/install the pinned tmux on the HOST for `vibe ui`. Same version,
+# Build/install the pinned tmux on the HOST for `vibe tui`. Same version,
 # checksum, and --enable-sixel configuration as the container build in
 # src/Dockerfile (keep the pins in sync with it): Debian/Ubuntu package
 # tmux 3.5a, which drops sixel images whenever a pane redraws; 3.7b holds
@@ -71,7 +71,7 @@ echo "Installed: $installed ($("$installed" -V))"
 case ":$PATH:" in
   *":$prefix/bin:"*) ;;
   *)
-    echo "NOTE: $prefix/bin is not on your PATH — add it, or point vibe ui at it:" >&2
-    echo "  export VIBE_UI_TMUX=$installed" >&2
+    echo "NOTE: $prefix/bin is not on your PATH — add it, or point vibe tui at it:" >&2
+    echo "  export VIBE_TUI_TMUX=$installed" >&2
     ;;
 esac

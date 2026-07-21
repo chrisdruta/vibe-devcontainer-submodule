@@ -92,7 +92,7 @@ fi
 # the pane command as a shell string, hence the one remaining %q re-quote.
 cmd=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
 if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
-  # Under `vibe ui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
+  # Under `vibe tui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
   # already draws tabs and chrome — drop this inner session's status bar so
   # the agent pane shows exactly one. Chained after new-session so it also
   # applies when -A reattaches a session created without the flag.

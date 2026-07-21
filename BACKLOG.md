@@ -64,8 +64,15 @@ designed; entries here are one paragraph of intent, not a spec.
   `examples/` carries rendered per-preset seeds verified against real
   installs. `src/*` paths are the new public interface (AGENTS.md).
 
-- **`vibe open`: host terminal-layout adapter — first feature after v1.0
-  (decided 2026-07-20).** One command that opens the workspace as native
+- **RETIRED (2026-07-21): `vibe open` — superseded by `vibe tui`** (the
+  host-tmux front door; see the tmux-as-UI supersession record below).
+  `open-terminal.sh`, the `open` dispatch, `VIBE_OPEN_LAYOUT/PROFILE`,
+  and the planned `.vibe/open-layouts.conf` DSL are all gone — layouts
+  are tmux's problem now. The per-pane commands it composed
+  (`vibe agent` / `shell` / `review`) remain first-class and manually
+  composable in any terminal, which stays the documented no-tmux
+  fallback. Original design kept below for the record:
+  One command that opens the workspace as native
   terminal panes, Windows Terminal first: each pane runs a stable `vibe`
   command (`vibe agent`, `vibe agent -a codex`, `vibe review`, `vibe shell`),
   so the terminal owns tabs/panes/rendering while the per-agent tmux sessions
@@ -103,8 +110,12 @@ designed; entries here are one paragraph of intent, not a spec.
   bump, same story as the preview hook). tmux.conf budget: ≤5 lines.
   Sequencing: this (A) → `vibe open` layout graduation (B) → opt-in Codex
   `notify` turn-complete seed (C, only after A proves out); A and B touch
-  disjoint files. Under `vibe open agents`, each native pane carries its own
-  tmux status bar, so the herdr glance emerges from composition.
+  disjoint files. (2026-07-21 update: render target is now the vibe tui
+  status line — tab state dots plus an agents strip on status line 2 of
+  the HOST server, state files bind-mounted host-readable; the original
+  per-WT-pane composition below described the retired vibe open world.)
+  Under `vibe open agents`, each native pane carried its own
+  tmux status bar, so the herdr glance emerged from composition.
 
 - **Productize worktrees.** Today parallel worktrees work but are manual:
   a differently-named worktree directory gets its own `agent-state-<basename>`
@@ -115,7 +126,8 @@ designed; entries here are one paragraph of intent, not a spec.
   share a volume via explicit `source=` in the seeded compose override).
   Constraint: the `agent-state-<workspace-basename>` default derivation is
   ABI (AGENTS.md) — sharing happens by writing an explicit `source=`, never
-  by changing the derivation. Scheduled after `vibe open`.
+  by changing the derivation. Scheduled with the vibe tui spaces phase
+  (worktrees are the natural in-project "spaces").
 
 - **Decision records from the 2026-07-20 external design review** (so future
   reviews don't relitigate): **REJECTED — session-backend abstraction**
@@ -244,5 +256,19 @@ designed; entries here are one paragraph of intent, not a spec.
   persists through redraws on the 3.7b host server; resize clears
   (upstream, rerun repaints). The `,*:sixel` terminal-feature ships in
   the container tmux.conf — baked into the image, so consumers get it
-  on their next rebuild (dogfood ran it live-set until then). Still
-  unverified: clickable "+" user-range mouse value.
+  on their next rebuild (dogfood ran it live-set until then). Clickable
+  "+" confirmed working (2026-07-21 evening) — phase 1 fully signed off.
+
+- **Cleanup pass (2026-07-21, post-sign-off): `vibe open` retired,
+  `vibe ui` renamed `vibe tui`.** Product framing settled with Chris:
+  the TUI is the headline feature — the one surface a user lives in —
+  and the command skeleton (up/rebuild/agent/run/exec/doctor + the
+  compose engine, per-checkout identity, `.env` hygiene, agent-state
+  volume) is the security-and-lifecycle foundation it stands on. The
+  renamed pieces: `src/scripts/host/tui.sh`, `src/config/tmux-tui.conf`,
+  `VIBE_TUI_TMUX`, `VIBE_TUI_CONF`; `vibe ui` remains an alias with a
+  one-line notice until v1.0. Project rename candidate on the table:
+  **"vibe-tui"** (Chris; supersedes the earlier "vibe-harness" working
+  name) — repo rename + v1.0 cut remain an explicit release decision for
+  Chris; GitHub auto-redirects old clone/submodule URLs, so consumer
+  pins survive the rename.

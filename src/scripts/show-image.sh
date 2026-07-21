@@ -106,29 +106,22 @@ render_fail() {
 }
 
 if [ -n "${TMUX:-}" ]; then
-  # Inside tmux, sixel in a passthrough envelope (explicit — chafa's "auto"
-  # default already means this, but leave no room for drift): this tmux
-  # build ingests raw sixel yet never re-emits it to the client, so native
-  # compositing shows only "+" placeholders. Passthrough paints at the
-  # client cursor — correct when this pane is focused in a calm window
-  # (manual use), garbage next to a busy agent
-  # TUI, which is why hooks feed the yazi preview window instead of
-  # rendering into shared windows. Kept on chafa deliberately: chafa pairs its sizing
-  # assumption with matching text-level cursor advancement OUTSIDE the
-  # envelope, which a hand-wrapped img2sixel raster cannot replicate
-  # (either CSI leaks into the envelope or the prompt overlaps the image).
-  # Crisp nearest-neighbor pixels inside tmux live in the preview window
-  # (prefix+i), which anchors and heals the raster properly.
-  # Native ingest vs passthrough (host-validated under vibe ui,
+  # Native ingest vs passthrough (host-validated under vibe tui,
   # 2026-07-21): when this tmux's CLIENT is declared sixel-capable
-  # (terminal-features — shipped in tmux.conf; the client under vibe ui
+  # (terminal-features — shipped in tmux.conf; the client under vibe tui
   # is the host tmux 3.7b), emit RAW sixel and let this server ingest it.
   # It then re-emits the image on every redraw, which is the only path
   # that survives nesting — passthrough forwards one transient copy that
   # the outer tmux composites onto cells this tmux repaints as blanks
   # moments later (prompt print/scroll), wiping it. Resize still clears
   # (upstream reflow); rerun to repaint. Feature-less clients keep the
-  # passthrough path. VIBE_SHOW_NATIVE=1/0 forces either way.
+  # passthrough envelope (historically the only working in-tmux path: an
+  # undeclared client renders native ingest as "+" placeholders). Both
+  # stay on chafa deliberately: it pairs its sizing assumption with
+  # matching text-level cursor advancement, which a hand-wrapped
+  # img2sixel raster cannot replicate (either CSI leaks into the envelope
+  # or the prompt overlaps the image). VIBE_SHOW_NATIVE=1/0 forces
+  # either way.
   client_features="$(tmux display-message -p '#{client_termfeatures}' 2>/dev/null || true)"
   native=0
   case ",$client_features," in *,sixel,*) native=1 ;; esac

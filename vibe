@@ -50,7 +50,7 @@ if [ "${1:-}" = "update" ]; then
   VIBE_REPO_ROOT="$repo_root" exec bash "$self_dir/src/scripts/update.sh" "$@"
 fi
 
-# Plumbing for host-side tooling (tmux-ui.conf bindings): where the harness
+# Plumbing for host-side tooling (tmux-tui.conf bindings): where the harness
 # checkout lives, resolved the same way this launcher resolved itself.
 if [ "${1:-}" = "__harness-dir" ]; then
   printf '%s\n' "$self_dir"
@@ -95,14 +95,10 @@ Commands:
   bootstrap   Rerun create-time dependency setup
   exec        Run an arbitrary command in the container (no .env loading)
   clip        Save the host clipboard image for the container: /tmp, or DIR in the workspace
-  open [LAYOUT]  Open the workspace as native terminal panes (Windows Terminal;
-              elsewhere it prints the per-pane commands to run manually).
-              Layouts: default (agent 70% | shell/review), agents (claude |
-              codex), tabs (agent tab + extras tab — for portrait monitors).
-              No LAYOUT: $VIBE_OPEN_LAYOUT if set, else default
-  ui          The workspace as a riced host-side tmux: agent pane | host
-              shell pane, tabbed windows, palette on prefix+Space (needs
-              tmux >= 3.4 on the host; 3.7b build: src/scripts/host/install-tmux.sh)
+  tui         The workspace as a riced host-side tmux — THE front door:
+              agent pane | host shell pane, tabbed windows, palette on
+              prefix+Space (needs tmux >= 3.4 on the host; pinned 3.7b
+              build: src/scripts/host/install-tmux.sh)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with
@@ -112,7 +108,7 @@ HELP
     ;;
 esac
 
-# Inside the container (a `vibe shell`, or the shell pane of `vibe open`)
+# Inside the container (a `vibe shell`, or a shell window of `vibe tui`)
 # the repo — and this launcher — are bind-mounted, so `./vibe show` is a
 # natural thing to type there. The lifecycle commands genuinely need the
 # host's docker, but the container-facing commands' implementations live
@@ -281,7 +277,7 @@ cexec() {
   if [ -t 0 ] && [ -t 1 ]; then
     tty_flags="-it"
   fi
-  # Under `vibe ui` the host tmux session carries VIBE_NESTED=1; forward it
+  # Under `vibe tui` the host tmux session carries VIBE_NESTED=1; forward it
   # so agent-entry.sh knows an outer tmux already draws the chrome. (The
   # ${arr[@]+...} idiom keeps bash 3.2 + set -u happy on an empty array.)
   local env_flags=()
@@ -441,20 +437,17 @@ case "$command_name" in
       exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "" "$(container_id)"
     fi
     ;;
-  open)
-    # Host-side: the workspace as native terminal panes (Windows Terminal
-    # first) — the terminal owns the layout, the per-agent tmux sessions
-    # keep persistence. ensure_up here so panes don't race compose up.
+  tui | ui)
+    # Host-side: the front door. A host TMUX owns layout, tabs, theme,
+    # palette — one surface for agent panes AND native host shells (git,
+    # vibe clip). Container tmux sessions own persistence underneath.
+    # (`vibe open` — WT-native panes — retired 2026-07-21 in its favor;
+    # the per-pane commands it composed still work standalone.)
+    if [ "$command_name" = "ui" ]; then
+      echo "(vibe ui is now: vibe tui)" >&2
+    fi
     ensure_up
-    exec bash "$self_dir/src/scripts/host/open-terminal.sh" "$repo_root" "$ws_base" "${1:-}"
-    ;;
-  ui)
-    # Host-side: same split of duties as `open`, but a host TMUX owns the
-    # layout (tabs, theme, palette) instead of Windows Terminal — one
-    # surface for agent panes AND native host shells (git, vibe clip).
-    # Container tmux sessions still own persistence underneath.
-    ensure_up
-    exec bash "$self_dir/src/scripts/host/ui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name"
+    exec bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name"
     ;;
   *)
     echo "Unknown command: $command_name" >&2

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# prefix+v in vibe ui: grab the host clipboard image (`vibe clip`) and type
+# prefix+v in vibe tui: grab the host clipboard image (`vibe clip`) and type
 # the resulting container path into the agent pane — replaces the whole
 # switch-tab / clip / copy / paste dance with one chord.
 #
@@ -31,7 +31,7 @@ if [ -z "$path" ]; then
   exit 0
 fi
 
-# Prefer the pane ui.sh marked as the agent; fall back to the window's
+# Prefer the pane tui.sh marked as the agent; fall back to the window's
 # active pane (ad-hoc windows never get roles stamped).
 target="$(vtmux list-panes -t "$window" -F '#{pane_id} #{@vibe_role}' 2>/dev/null \
   | awk '$2 == "agent" { print $1; exit }')"
