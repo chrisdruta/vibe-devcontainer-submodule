@@ -119,6 +119,18 @@ if [ -n "${TMUX:-}" ]; then
   # (either CSI leaks into the envelope or the prompt overlaps the image).
   # Crisp nearest-neighbor pixels inside tmux live in the preview window
   # (prefix+i), which anchors and heals the raster properly.
+  # VIBE_SHOW_NATIVE=1: nested-tmux experiment (vibe ui) — emit RAW sixel
+  # and let THIS tmux ingest it natively instead of forwarding one
+  # transient copy outward. Passthrough dies under nesting: the outer
+  # tmux composites the image onto cells the inner tmux repaints as
+  # blanks moments later (prompt print/scroll), wiping it. Native ingest
+  # makes each 3.7b layer re-emit the image on redraw. Requires the
+  # inner server to believe its client accepts sixel
+  # (terminal-features ",*:sixel"), else it draws "+" placeholders.
+  if [ "${VIBE_SHOW_NATIVE:-0}" = "1" ]; then
+    dlog "show(tmux pane) $path fmt=$(sniff_format "$path") via chafa native ingest (VIBE_SHOW_NATIVE)"
+    exec chafa -f sixel --animate off "$path"
+  fi
   dlog "show(tmux pane) $path fmt=$(sniff_format "$path") via chafa --passthrough tmux"
   exec chafa -f sixel --animate off --passthrough tmux "$path"
 fi
