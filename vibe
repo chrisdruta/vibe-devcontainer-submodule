@@ -79,7 +79,7 @@ Commands:
               show changelog delta + diff, checkout, stage — commit & rebuild stay yours
   shell       Open a Bash shell in the container
   attach      Attach/create a tmux session in the container
-              (SESSION argument > DEV_ATTACH_TMUX_SESSION > "main")
+              (SESSION argument > DEV_ATTACH_TMUX_SESSION > "services")
   agent       Run the configured default agent with explicit .env loading
               (--cold: skip CLAUDE.md/AGENTS.md and .claude customizations;
                -a/--agent CMD: run CMD instead of DEV_AGENT_CMD, e.g. -a codex)
