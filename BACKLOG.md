@@ -56,10 +56,22 @@ designed; entries here are one paragraph of intent, not a spec.
   which is the same class of solution maintained upstream. The remaining
   harness-owned render code is the small `vibe show` one-shot path
   (preview-lib.sh); if THAT grows or breaks repeatedly, fold it into yazi
-  usage or revisit. Standing caveat (2026-07-21): yazi is the incumbent for
-  dedicated image review, not a settled commitment — with tmux 3.7b's
-  sixel retention, simpler viewers (or plain `vibe show` in a split)
-  compete again; re-evaluate after the 3.7b rebuild validation. The host launcher, installer, and lifecycle scripts
+  usage or revisit. Caveat RESOLVED 2026-07-21 (evening re-eval, three-way
+  web survey — yazi ecosystem / tmux-fzf-composed / standalone TUIs): yazi
+  KEEPS its seat but the job changed — image viewing no longer needs it
+  (native ingest covers `vibe show`), so yazi is now the LOCKED READ-ONLY
+  file browser (keymap noops + wholesale opener replacement; it was the
+  only file manager that's provably lockable — broot/lazygit/gitui/mc/
+  ranger/lf/nnn all failed the lock test, awesome-tmux sidebars are dead
+  since 2022), and **revdiff** (umputun, pinned checksummed Go binary)
+  was adopted as `vibe diff` — the purpose-built read-only diff-review
+  TUI (content↔diff toggle, annotations to stdout). Trial: if revdiff
+  holds up its annotation output may absorb the A/R verdict flow; the
+  ~1-day yazi diff-toggle Lua plugin (existence proof:
+  vscode-git-gutter.yazi on our exact 26.5.6) stays the fallback if
+  revdiff disappoints. Spare parts if ever needed: fzf `change-preview`
+  glue (~50 lines, exact toggle UX), diffnav (checksummed diff-tree
+  pager). The host launcher, installer, and lifecycle scripts
   stay bash regardless — they are the bootstrap and must run on stock
   macOS bash 3.2 with nothing installed.
 

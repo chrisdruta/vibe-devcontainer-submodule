@@ -85,6 +85,11 @@ ARG USER_UID=1000
 ARG YAZI_VERSION=26.5.6
 ARG YAZI_SHA256_AMD64=1c9096f0a83b8102c194385f644cdeff93cc8269426163c9d033041ebd537bd2
 ARG YAZI_SHA256_ARM64=c38b07961e7fc4c76503fd0f4a1b4bd0b379a99835b818cd899b0315c728e1e1
+# revdiff: the read-only diff-review TUI (vibe diff). Reviews what an agent
+# wrote without being able to touch it; annotations print to stdout on quit.
+ARG REVDIFF_VERSION=1.11.1
+ARG REVDIFF_SHA256_AMD64=7958a6bef723267fed18b0be96476bb767636afe966338ed7e370c0a506fd54c
+ARG REVDIFF_SHA256_ARM64=87c522516e2d0ef113b74ff729a1e9072aad9958f1aeb6836b90d2b8fa2e0762
 
 ENV LANG=C.UTF-8 \
     PATH=/home/vscode/.local/bin:/home/vscode/.bun/bin:/home/vscode/.rokit/bin:${PATH}
@@ -163,6 +168,20 @@ RUN tmp="$(mktemp -d)" \
     && unzip -q "$tmp/yazi.zip" -d "$tmp" \
     && install -m 0755 "$tmp/yazi-${arch}-unknown-linux-gnu/yazi" \
         "$tmp/yazi-${arch}-unknown-linux-gnu/ya" /usr/local/bin/ \
+    && rm -rf "$tmp"
+
+# revdiff (vibe diff): goreleaser tarball, binary at the archive root.
+RUN tmp="$(mktemp -d)" \
+    && case "$(uname -m)" in \
+         x86_64)  arch=amd64; sha="${REVDIFF_SHA256_AMD64}" ;; \
+         aarch64) arch=arm64; sha="${REVDIFF_SHA256_ARM64}" ;; \
+         *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
+       esac \
+    && curl -fsSL -o "$tmp/revdiff.tar.gz" \
+        "https://github.com/umputun/revdiff/releases/download/v${REVDIFF_VERSION}/revdiff_${REVDIFF_VERSION}_linux_${arch}.tar.gz" \
+    && echo "${sha}  $tmp/revdiff.tar.gz" | sha256sum -c - \
+    && tar -xzf "$tmp/revdiff.tar.gz" -C "$tmp" \
+    && install -m 0755 "$tmp/revdiff" /usr/local/bin/ \
     && rm -rf "$tmp"
 
 # Node is required by the npm-distributed Codex CLI and available standalone.

@@ -5,7 +5,33 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
-- **Fix: `DEV_BOOTSTRAP_STRICT=0` actually continues past a missing tool.**
+- **New: `vibe diff` — read-only diff review with revdiff (rebuild
+  required).** The 2026-07-21 yazi re-evaluation split the review story in
+  two: yazi stays the general read-only browser (and image surface), and
+  [revdiff](https://github.com/umputun/revdiff) — a purpose-built,
+  read-only-by-construction diff-review TUI — becomes the "review what the
+  agent changed" surface. `vibe diff` runs it in the invoking terminal
+  (all flags pass through: `--staged`, `--untracked`, base/against refs);
+  `v` toggles between the final file text and its diff, and annotations
+  made during review print to stdout on quit — a ready-made channel for
+  handing review notes back to an agent. Pinned goreleaser binary
+  (amd64+arm64, upstream checksums verified) baked into the image; palette
+  entry "review diff (revdiff)" on `r`; doctor checks the binary. Trial
+  status: if it holds up, its annotation output may eventually absorb the
+  vibe review verdict flow.
+- **`vibe review` / the yazi surface is now locked read-only.** It was
+  always meant as a viewing/reviewing surface; now the config enforces it:
+  the harness keymap unbinds shell escape and every file operation
+  (remove, create, rename, cut, paste — `noop` also hides them from the
+  help panel; yazi has no command console, so unbound means unreachable),
+  and the openers are replaced wholesale so Enter/`o` view through
+  `less -R` — `$EDITOR` and system openers do not exist on this surface.
+  Approve/reject (A/R) and all navigation are untouched. Projects keep
+  the escape hatch by design: their keymap entries merge in front and can
+  deliberately re-bind an operation; a project-owned yazi.toml should
+  keep the `[opener]`/`[open]` block to keep the lock. Live from the
+  checkout immediately for `vibe review`; the baked copy behind the
+  tmux `prefix+i` preview window updates on rebuild.
   `require_command` ran as a bare command under `set -e`, so a detected
   lockfile whose tool wasn't installed aborted bootstrap regardless of
   strictness — the documented warn-and-continue path was unreachable. The

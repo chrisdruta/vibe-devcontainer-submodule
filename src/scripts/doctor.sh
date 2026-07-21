@@ -41,9 +41,10 @@ for command_name in $DEV_REQUIRED_COMMANDS; do
   fi
 done
 
-# Image stack: yazi drives review (file(1) is its mime dependency, ya its
-# remote control the hook uses); chafa/img2sixel render `vibe show`.
-for command_name in yazi ya file chafa img2sixel; do
+# Review stack: yazi drives review (file(1) is its mime dependency, ya its
+# remote control the hook uses); chafa/img2sixel render `vibe show`;
+# revdiff is `vibe diff`.
+for command_name in yazi ya file chafa img2sixel revdiff; do
   if command -v "$command_name" >/dev/null 2>&1; then
     check_ok "$command_name -> $(command -v "$command_name")"
   else

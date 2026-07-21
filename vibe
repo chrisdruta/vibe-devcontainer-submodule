@@ -107,8 +107,12 @@ Commands:
                container agents unaffected; --fresh: --kill, then relaunch)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
-  review [DIR]  Browse/review images with yazi; A approves, R rejects (with
-              optional note) to .review-decisions.jsonl beside the images
+  review [DIR]  Read-only browse/review with yazi (file ops & shell are
+              unbound; Enter views through a pager); A approves, R rejects
+              (with optional note) to .review-decisions.jsonl beside the images
+  diff        Review working-tree changes in revdiff: read-only diff TUI,
+              v toggles file-content/diff view (--staged, --untracked;
+              annotations you make print to stdout on quit)
 HELP
     exit 0
     ;;
@@ -128,6 +132,7 @@ if [ -f /.dockerenv ] && [ -z "${VIBE_SKIP_CONTAINER_DISPATCH:-}" ]; then
   case "$command_name" in
     show)      exec bash "$self_dir/src/scripts/show-image.sh" "$@" ;;
     review)    exec bash "$self_dir/src/scripts/review.sh" "$@" ;;
+    diff)      exec revdiff "$@" ;;
     agent)     exec bash "$self_dir/src/scripts/agent-entry.sh" agent "$@" ;;
     attach)    exec bash "$self_dir/src/scripts/agent-entry.sh" attach "$@" ;;
     doctor)    exec bash "$self_dir/src/scripts/doctor.sh" "$@" ;;
@@ -144,7 +149,7 @@ if [ -f /.dockerenv ] && [ -z "${VIBE_SKIP_CONTAINER_DISPATCH:-}" ]; then
     shell) exec bash "$@" ;;
     *)
       echo "vibe $command_name needs docker and runs on the host — this is a container shell." >&2
-      echo "(container-side commands work from here: show review agent attach run exec doctor ps)" >&2
+      echo "(container-side commands work from here: show review diff agent attach run exec doctor ps)" >&2
       exit 1
       ;;
   esac
@@ -436,6 +441,13 @@ case "$command_name" in
     # .vibe/yazi/ layers preferences and rebinds on top.
     ensure_up
     cexec "$(container_id)" bash .vibe/harness/src/scripts/review.sh "$@"
+    ;;
+  diff)
+    # revdiff in the INVOKING terminal: read-only diff review of the
+    # working tree (never touches files); the binary is baked in the
+    # image, so this is a plain exec — all flags pass through.
+    ensure_up
+    cexec "$(container_id)" revdiff "$@"
     ;;
   clip)
     # Host-side: grabs the OS clipboard image; container /tmp by default,
