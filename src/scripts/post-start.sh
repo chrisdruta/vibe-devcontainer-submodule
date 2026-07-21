@@ -38,10 +38,20 @@ if ! bash "$script_dir/doctor.sh" 2>&1 | tee /tmp/dev-doctor.log; then
   warn "Environment checks reported problems; see /tmp/dev-doctor.log"
 fi
 
+# The doctor above is advisory by design — its MISSes describe the
+# environment, they don't mean the start failed. The project hook is
+# different: it is the project declaring what a usable start means.
+# Swallowing its failure made `vibe up` report success on a broken
+# environment (2026-07 external review), so under the strict default it
+# now propagates — do_up surfaces the nonzero exit.
 project_hook="$VIBE_DIR/project/post-start.sh"
 if [[ -f "$project_hook" ]]; then
   if ! bash "$project_hook"; then
-    warn "Project post-start hook failed"
+    if [[ "$DEV_BOOTSTRAP_STRICT" == "1" ]]; then
+      fail "Project post-start hook failed"
+      exit 1
+    fi
+    warn "Project post-start hook failed; continuing because DEV_BOOTSTRAP_STRICT=0"
   fi
 fi
 

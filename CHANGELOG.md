@@ -5,6 +5,27 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Fix: `DEV_BOOTSTRAP_STRICT=0` actually continues past a missing tool.**
+  `require_command` ran as a bare command under `set -e`, so a detected
+  lockfile whose tool wasn't installed aborted bootstrap regardless of
+  strictness — the documented warn-and-continue path was unreachable. The
+  tool preflight now lives inside `run_step`: strict=1 errors as before,
+  strict=0 warns and skips the step. (2026-07 external review.)
+- **Fix: a failing project post-start hook now fails `vibe up`.**
+  post-start.sh warned and exited 0 unconditionally, so `vibe up` reported
+  a ready environment even when the project's own hook said otherwise.
+  Under `DEV_BOOTSTRAP_STRICT=1` (the default) the hook's failure now
+  propagates; `0` keeps warn-and-continue. Doctor stays advisory in both
+  modes — its MISSes describe the environment, they don't mean the start
+  failed. (2026-07 external review.)
+- **Fix: `.gitmodules` migration residue.** This repo's own dogfood pin
+  carried the devcontainer-era section name (`submodule
+  ".devcontainer/harness"` with `path = .vibe/harness`) and an SSH URL —
+  a fresh public clone + `submodule update` demanded GitHub SSH
+  credentials for no reason. Renamed to `".vibe/harness"` with the HTTPS
+  URL. `install.sh --force` now also removes the legacy-named section, so
+  a forced reinstall on a migrated repo can't leave a stale registration.
+  (2026-07 external review.)
 - **Fix: per-checkout project identity — same-named checkouts no longer
   share a compose namespace.** The project name was derived from the
   workspace basename alone, so `~/dev/a/app` and `~/dev/b/app` collided on

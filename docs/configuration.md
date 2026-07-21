@@ -23,7 +23,7 @@ Non-secret behavior toggles, sourced by the lifecycle scripts and `vibe agent`:
 | `DEV_AGENT_TMUX`        | `1` (seeded; unset = `0`)     | `1`: `vibe agent` runs in a persistent tmux session — rerunning attaches, detaching (`Ctrl-b d`) keeps it alive |
 | `DEV_AGENT_TMUX_SESSION`| `agent`                       | tmux session name used by `vibe agent`              |
 | `DEV_ATTACH_TMUX_SESSION`| `services` (seeded commented-out) | Session `vibe attach` opens with no argument, and the session `vibe-svc` populates ([services.md](services.md)) |
-| `DEV_BOOTSTRAP_STRICT`  | `1`                           | `1`: bootstrap steps fail loudly; `0`: warn and continue |
+| `DEV_BOOTSTRAP_STRICT`  | `1`                           | `1`: bootstrap steps and the project post-start hook fail loudly; `0`: warn and continue (a step whose tool is missing is skipped) |
 | `DEV_AUTO_INSTALL`      | `1`                           | Enable lockfile-detected dependency installation   |
 | `DEV_AUTO_GIT_HOOKS`    | `1`                           | Wire `.githooks/` into `core.hooksPath` (see [security.md](security.md)) |
 | `DEV_AUTO_GIT_LFS`      | `1`                           | Repo-local `git lfs install` when LFS attributes exist |

@@ -263,6 +263,11 @@ if [[ -e "$destination/compose.yaml" || -e "$destination/vibe" ]]; then
   git -C "$target" submodule deinit -f -- .vibe/harness >/dev/null 2>&1 || true
   git -C "$target" rm -rq --cached .vibe/harness >/dev/null 2>&1 || true
   git -C "$target" config -f .gitmodules --remove-section 'submodule..vibe/harness' >/dev/null 2>&1 || true
+  # Repos migrated from the devcontainer-era layout can carry the OLD
+  # section name with the NEW path (submodule ".devcontainer/harness" with
+  # path = .vibe/harness) — remove that registration too, or a forced
+  # reinstall leaves .gitmodules inconsistent (2026-07 external review).
+  git -C "$target" config -f .gitmodules --remove-section 'submodule..devcontainer/harness' >/dev/null 2>&1 || true
   rm -rf "$(git -C "$target" rev-parse --path-format=absolute --git-common-dir)/modules/.vibe/harness"
   backup="$target/.vibe.backup.$(date +%Y%m%d%H%M%S)"
   mv -- "$destination" "$backup"

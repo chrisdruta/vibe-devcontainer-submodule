@@ -62,6 +62,18 @@ require_command() {
 run_step() {
   local description="$1"
   shift
+  # Tool preflight lives HERE, not in a bare require_command before the
+  # call: under `set -e` a bare failing command aborts regardless of
+  # DEV_BOOTSTRAP_STRICT, which made non-strict mode abort on a missing
+  # tool instead of warning past it (2026-07 external review).
+  if ! command -v "$1" >/dev/null 2>&1; then
+    if [[ "$DEV_BOOTSTRAP_STRICT" == "1" ]]; then
+      fail "$description: required command not found: $1"
+      return 1
+    fi
+    warn "$description skipped; command not found: $1 (DEV_BOOTSTRAP_STRICT=0)"
+    return 0
+  fi
   log "$description"
   if "$@"; then
     return 0
