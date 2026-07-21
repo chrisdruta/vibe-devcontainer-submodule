@@ -218,8 +218,18 @@ designed; entries here are one paragraph of intent, not a spec.
   (spaces): session-per-project already works (per-checkout identity
   falls back to the unique project name on basename collision —
   two-clone test green in-container 2026-07-21); a session picker popup
-  (`choose-tree` or fzf) + `vibe ps` palette upgrade complete it. Still
-  host-unverified as of this record: nested sixel (`vibe show` through
-  host-tmux → container-tmux passthrough), shift+tab extended-keys
-  through the nested pair, clickable "+" user-range mouse value, WT
-  rendering of the theme.
+  (`choose-tree` or fzf) + `vibe ps` palette upgrade complete it.
+  Host-smoke results (same day, Chris's WSL): theme/tabs/borders render
+  in WT, shift+tab mode-cycling survives the nested pair, VIBE_NESTED
+  plumbing works end-to-end. Distro tmux 3.6 does NOT ingest sixel at
+  all (compile-time flag; the "images degrade below 3.7" warning was
+  optimistic — it's no images, period), so the host 3.7b source build is
+  effectively required for `vibe show` in the UI; 3.7b installed via
+  install-tmux.sh. Two UX gaps found and fixed same day: reattaching
+  into a dead-agent-pane corpse with no affordance (ui.sh now respawns a
+  dead agent / rebuilds an all-dead session before attaching; prefix+Q =
+  documented quit, prefix+d = detach, both in the palette), and the
+  running-server-pins-the-old-binary trap after a tmux upgrade (ui.sh
+  now warns on server/client version skew and prints the kill-server
+  line). Still unverified: nested sixel on the 3.7b host server,
+  clickable "+" user-range mouse value.

@@ -182,10 +182,12 @@ Keys (prefix is **Ctrl+Space**; the inner agent session keeps its own
 
 | Chord | Effect |
 | --- | --- |
-| `prefix Space` | palette: agent/codex/shell/services windows, git popup, doctor |
+| `prefix Space` | palette: agent/codex/shell/services windows, git popup, doctor, detach/quit |
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
 | `prefix r` | respawn a dead agent pane (it stays visible on exit) |
+| `prefix d` | detach — everything keeps running; `vibe ui` reattaches |
+| `prefix Q` | quit the UI session (asks first; agents keep running) |
 | `prefix R` | reload tmux-ui.conf |
 | `Alt+←→↑↓` / `Alt+1..9` | move between panes / windows, no prefix |
 
@@ -193,6 +195,15 @@ Tabs are clickable (mouse is on), and the `+` at the right end of the status
 bar opens a new host window. The config lives at `src/config/tmux-ui.conf`
 on its own socket — your personal `~/.tmux.conf` and default tmux server are
 never touched.
+
+**Leaving the UI:** closing the terminal window is just a detach (same as
+`prefix d`) — the layout and every pane keep running, and the next
+`./vibe ui` reattaches, respawning the agent pane if it died in the
+meantime. `prefix Q` closes the UI session for real; container agent
+sessions survive either way — the UI never owns your work. One upgrade
+gotcha: a *running* UI server pins the tmux binary it was started with, so
+after installing a newer tmux run `tmux -L vibe kill-server` once (`vibe
+ui` warns about the skew and prints exactly that).
 
 Windows Terminal bindings worth adding for pane-heavy layouts (all unbound
 by default; Settings → "Open JSON file"). Recent WT splits these across two

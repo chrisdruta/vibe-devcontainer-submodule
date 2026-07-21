@@ -66,6 +66,28 @@ vtmux() {
   "$tmux_bin" -L "$socket" -f "$conf" "$@"
 }
 
+# A running server pins the binary it was started with — attaching never
+# upgrades it. After a host tmux upgrade the old server keeps serving the
+# socket (and e.g. still lacks sixel), so surface the skew instead of
+# letting the upgrade silently not take effect.
+server_probe="$("$tmux_bin" -L "$socket" display-message -p '#{version}' 2>&1)" || server_probe=""
+case "$server_probe" in
+  "" | *"no server"* | *"error connecting"*) ;; # no server yet: fresh start below
+  *"protocol version mismatch"*)
+    echo "The running vibe ui server was started by an incompatible tmux." >&2
+    echo "Kill it with the binary that started it (usually the distro one):" >&2
+    echo "  /usr/bin/tmux -L $socket kill-server   (container agent sessions are unaffected)" >&2
+    exit 1
+    ;;
+  *)
+    if [ "$server_probe" != "$raw_version" ]; then
+      echo "vibe ui: running server is tmux $server_probe, your binary is $raw_version —" >&2
+      echo "the old server keeps serving until it exits. To pick up the new one:" >&2
+      echo "  tmux -L $socket kill-server   (container agent sessions are unaffected)" >&2
+    fi
+    ;;
+esac
+
 # Session per project. Friendly name first (basename); if a same-named
 # session belongs to a DIFFERENT checkout, fall back to the unique
 # per-checkout project name so two clones never share a session. Plain -t
@@ -78,6 +100,31 @@ if vtmux has-session -t "$session" 2>/dev/null; then
   existing_path="$(vtmux display-message -p -t "$session" '#{session_path}')"
   if [ "$existing_path" != "$repo_root" ]; then
     session="$project_name"
+  fi
+fi
+
+# Self-heal a degraded session before reattaching: remain-on-exit keeps a
+# dead agent pane as a corpse (deliberate — the layout survives), but
+# reattaching INTO a corpse with no hint is a trap. A dead agent among
+# live panes is respawned in place; a session with nothing left alive is
+# rebuilt from scratch.
+if vtmux has-session -t "$session" 2>/dev/null; then
+  live_panes=0
+  dead_agent=""
+  while read -r pane dead role; do
+    [ -n "$pane" ] || continue
+    if [ "$dead" = "1" ]; then
+      [ "$role" = "agent" ] && dead_agent="$pane"
+    else
+      live_panes=$((live_panes + 1))
+    fi
+  done <<EOF
+$(vtmux list-panes -s -t "$session" -F '#{pane_id} #{pane_dead} #{@vibe_role}')
+EOF
+  if [ "$live_panes" -eq 0 ]; then
+    vtmux kill-session -t "$session"
+  elif [ -n "$dead_agent" ]; then
+    vtmux respawn-pane -k -t "$dead_agent"
   fi
 fi
 
