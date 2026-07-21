@@ -128,7 +128,7 @@ designed; entries here are one paragraph of intent, not a spec.
   container hook to the HOST tmux server ("hook sets `@vibe_state`" targets
   the inner server; a bind-mounted file the host can read but is never told
   about cannot trigger a redraw under `status-interval 0` with `#()`
-  banned). Redesign direction (spike before committing): the **title
+  banned). Redesign direction: the **title
   channel** — the hook updates inner-server state, inner tmux re-emits it
   as an OSC title through the existing `docker exec` TTY (`set-titles` +
   state-encoded `set-titles-string`), the outer pane's `pane_title` changes
@@ -136,9 +136,29 @@ designed; entries here are one paragraph of intent, not a spec.
   the host's `pane-title-changed` hook renders dots/flash — event-driven,
   no daemon, no bind mount, no host-socket sharing, and the agent→pane
   mapping is intrinsic (the event arrives ON the owning pane; duplicate
-  attachments each get their own dot). This likely DROPS the
-  "state files bind-mounted host-readable" delta above: files stay
-  container-tmpfs for `vibe ps` only. Further review corrections now part
+  attachments each get their own dot). **SPIKE VALIDATED 2026-07-21**
+  (nested 3.7b pair in-container; only the docker-exec pty link — already
+  proven for escapes by sixel — and the WT host smoke remain, and both
+  land free during implementation): inner option change → OSC re-emit is
+  IMMEDIATE, no `refresh-client` needed, on attach and on every
+  transition; per-SESSION `set-titles-string` scoping works (each outer
+  pane renders its own attached agent session's state independently);
+  outer window names stay untouched under `allow-rename off`. Gotchas the
+  spike bakes into the design: (a) INJECTION — `pane_title` is
+  container-controlled text; the host hook command must interpolate ONLY
+  `#{pane_id}` (server-controlled `%N`) and the render script fetches the
+  title out-of-band via `display -p -t "$1" '#{pane_title}'` — never let
+  a format expand title text into host shell words (the naive
+  `run-shell "echo ... #{pane_title} >> log"` pattern sh-parses the `|`
+  delimiters — observed exploding into pipelines); the renderer also
+  validates the `vibe1|` prefix before trusting structure; (b)
+  `pane-title-changed` is a PANE-scope hook — `set-hook -g` registers and
+  fires it fine, but it does NOT appear in `show-hooks -g` (session-hook
+  list), so don't misread that as unregistered; (c) hook `run-shell` is
+  asynchronous — a read immediately after a transition can still see the
+  old value; harmless for rendering, but tests must allow a beat. This
+  DROPS the "state files bind-mounted host-readable" delta above: files
+  stay container-tmpfs for `vibe ps` only. Further review corrections now part
   of the design: identity splits into `VIBE_AGENT_SESSION` (stable logical
   name) + `VIBE_AGENT_INSTANCE` (unique per run; minted per process under
   `DEV_AGENT_TMUX=0`), both passed via an `env` prefix in the ONE
