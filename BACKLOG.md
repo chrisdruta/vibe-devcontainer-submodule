@@ -410,8 +410,21 @@ designed; entries here are one paragraph of intent, not a spec.
   needs — not a refactor project. (4) agents strip = CROSS-PROJECT:
   Chris deliberately superseded the no-fleet-view ledger line (amended
   in place above) — render-only glance, control stays ceded. Still
-  required before coding it: the static format spec, plus two open
-  technical questions — cross-session aggregation in a status-format
-  (#{S:} loops over other sessions' options) and whether option writes
-  in session B trigger a status redraw of session A's clients under
-  `status-interval 0`.
+  required before coding it: only the static format spec — the technical
+  questions are SPIKE-ANSWERED 2026-07-21 (scratch-socket 3.7b pair,
+  nested observer client, in-container): (a) `#{S:}` loops DO aggregate
+  other sessions' user options, and nested `#{W:}`/`#{P:}` resolve the
+  looped window/pane's own options — GOTCHA: a literal comma inside
+  `#{W:...}`/`#{P:...}` is the current-window/pane ALTERNATE-format
+  separator, so it silently splits the format (spike hit it: a
+  one-window session rendered the empty alternate and looked like
+  nested lookups were broken); use non-comma separators or `#,`.
+  (b) under `status-interval 0`, `set-option` writes from an external
+  client at ALL THREE scopes (session `-t`, window `-w`, pane `-p`)
+  immediately redraw OTHER sessions' attached clients' status lines —
+  state-render.sh's existing writes drive a cross-project strip with
+  zero new plumbing. (c) the one real gap: session create/kill does NOT
+  redraw other clients' status; validated event-driven fix is
+  `session-created`/`session-closed` hooks running `refresh-client -S`
+  over `list-clients` (xargs one-liner, no polling) — strip picked up
+  the new and killed session immediately in the spike.
