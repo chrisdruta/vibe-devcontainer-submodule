@@ -91,6 +91,7 @@ Commands:
               (--cold: skip CLAUDE.md/AGENTS.md and .claude customizations;
                -a/--agent CMD: run CMD instead of DEV_AGENT_CMD, e.g. -a codex)
   run         Run any command with explicit .env loading (e.g. vibe run grok)
+  ps          Agents & services at a glance: state, liveness, age
   doctor      Check the active environment
   bootstrap   Rerun create-time dependency setup
   exec        Run an arbitrary command in the container (no .env loading)
@@ -125,6 +126,7 @@ if [ -f /.dockerenv ] && [ -z "${VIBE_SKIP_CONTAINER_DISPATCH:-}" ]; then
     agent)     exec bash "$self_dir/src/scripts/agent-entry.sh" agent "$@" ;;
     attach)    exec bash "$self_dir/src/scripts/agent-entry.sh" attach "$@" ;;
     doctor)    exec bash "$self_dir/src/scripts/doctor.sh" "$@" ;;
+    ps)        exec bash "$self_dir/src/scripts/ps.sh" "$@" ;;
     bootstrap) exec bash "$self_dir/src/scripts/post-create.sh" "$@" ;;
     run)
       (($#)) || { echo "Usage: vibe run COMMAND [ARGUMENT ...]" >&2; exit 2; }
@@ -137,7 +139,7 @@ if [ -f /.dockerenv ] && [ -z "${VIBE_SKIP_CONTAINER_DISPATCH:-}" ]; then
     shell) exec bash "$@" ;;
     *)
       echo "vibe $command_name needs docker and runs on the host — this is a container shell." >&2
-      echo "(container-side commands work from here: show review agent attach run exec doctor)" >&2
+      echo "(container-side commands work from here: show review agent attach run exec doctor ps)" >&2
       exit 1
       ;;
   esac
@@ -398,6 +400,10 @@ case "$command_name" in
   doctor)
     ensure_up
     cexec "$(container_id)" bash .vibe/harness/src/scripts/doctor.sh "$@"
+    ;;
+  ps)
+    ensure_up
+    cexec "$(container_id)" bash .vibe/harness/src/scripts/ps.sh "$@"
     ;;
   bootstrap)
     ensure_up
