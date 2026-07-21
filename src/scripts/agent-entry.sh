@@ -92,6 +92,18 @@ fi
 # the pane command as a shell string, hence the one remaining %q re-quote.
 cmd=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
 if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
+  # Under `vibe ui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
+  # already draws tabs and chrome — drop this inner session's status bar so
+  # the agent pane shows exactly one. Chained after new-session so it also
+  # applies when -A reattaches a session created without the flag.
+  if [ "${VIBE_NESTED:-0}" = "1" ]; then
+    # Explicit -t: without it the chained command binds to whatever session
+    # tmux considers current, not necessarily the one just created. Plain
+    # name, no "=" — set-option's -t is a pane target, which rejects the
+    # exact-match prefix (verified on 3.7b); exact names win over prefix
+    # matches, and these session names are harness-controlled anyway.
+    exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; set-option -t "$session" status off
+  fi
   exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")"
 fi
 exec "${cmd[@]}"

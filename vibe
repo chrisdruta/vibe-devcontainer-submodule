@@ -50,6 +50,13 @@ if [ "${1:-}" = "update" ]; then
   VIBE_REPO_ROOT="$repo_root" exec bash "$self_dir/src/scripts/update.sh" "$@"
 fi
 
+# Plumbing for host-side tooling (tmux-ui.conf bindings): where the harness
+# checkout lives, resolved the same way this launcher resolved itself.
+if [ "${1:-}" = "__harness-dir" ]; then
+  printf '%s\n' "$self_dir"
+  exit 0
+fi
+
 if [[ "$vibe_dirname" != ".vibe" ]]; then
   echo "This project is on the retired devcontainer layout ($vibe_dirname/)." >&2
   echo "Migrate it first: see the harness docs/updating.md ->" >&2
@@ -93,6 +100,9 @@ Commands:
               Layouts: default (agent 70% | shell/review), agents (claude |
               codex), tabs (agent tab + extras tab — for portrait monitors).
               No LAYOUT: $VIBE_OPEN_LAYOUT if set, else default
+  ui          The workspace as a riced host-side tmux: agent pane | host
+              shell pane, tabbed windows, palette on prefix+Space (needs
+              tmux >= 3.4 on the host; 3.7b build: src/scripts/host/install-tmux.sh)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with
@@ -271,7 +281,14 @@ cexec() {
   if [ -t 0 ] && [ -t 1 ]; then
     tty_flags="-it"
   fi
-  docker exec "$tty_flags" -u vscode -w "$workdir" "$cid" "$@"
+  # Under `vibe ui` the host tmux session carries VIBE_NESTED=1; forward it
+  # so agent-entry.sh knows an outer tmux already draws the chrome. (The
+  # ${arr[@]+...} idiom keeps bash 3.2 + set -u happy on an empty array.)
+  local env_flags=()
+  if [ -n "${VIBE_NESTED:-}" ]; then
+    env_flags+=(-e "VIBE_NESTED=$VIBE_NESTED")
+  fi
+  docker exec "$tty_flags" ${env_flags[@]+"${env_flags[@]}"} -u vscode -w "$workdir" "$cid" "$@"
 }
 
 # Bring the container up and run the lifecycle scripts the way the
@@ -430,6 +447,14 @@ case "$command_name" in
     # keep persistence. ensure_up here so panes don't race compose up.
     ensure_up
     exec bash "$self_dir/src/scripts/host/open-terminal.sh" "$repo_root" "$ws_base" "${1:-}"
+    ;;
+  ui)
+    # Host-side: same split of duties as `open`, but a host TMUX owns the
+    # layout (tabs, theme, palette) instead of Windows Terminal — one
+    # surface for agent panes AND native host shells (git, vibe clip).
+    # Container tmux sessions still own persistence underneath.
+    ensure_up
+    exec bash "$self_dir/src/scripts/host/ui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name"
     ;;
   *)
     echo "Unknown command: $command_name" >&2

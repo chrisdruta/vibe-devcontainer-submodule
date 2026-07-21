@@ -154,6 +154,46 @@ matches nothing). Check the profile list in WT Settings for the real name,
 then pin it on the host — `export VIBE_OPEN_PROFILE="Ubuntu"` in your WSL
 `~/.bashrc` (set it empty to skip profile selection entirely).
 
+## One-surface tmux UI (`vibe ui`)
+
+`vibe open`'s inverse: a **host-side tmux** owns the layout, tabs, and theme,
+and the terminal is just a fullscreen window. The same container tmux
+sessions keep persistence underneath — an agent pane is still `./vibe agent`
+attaching to session `agent`. What you gain over `vibe open`: native HOST
+panes in the same surface (host-side git, `vibe clip`) instead of a separate
+terminal tab, layouts that work in any terminal (macOS included, no wt.exe),
+and one place to grow the multi-project "spaces" view later.
+
+```bash
+./vibe ui     # session per project on the dedicated "vibe" tmux socket:
+              # agent pane (70%) | host shell pane, tabs across the top
+```
+
+Needs tmux ≥ 3.4 on the host; below 3.7, `vibe show` images don't survive
+pane redraws. The pinned 3.7b `--enable-sixel` build (same recipe as the
+container's) installs to `~/.local` with:
+
+```bash
+bash .vibe/harness/src/scripts/host/install-tmux.sh   # VIBE_UI_TMUX=... to point elsewhere
+```
+
+Keys (prefix is **Ctrl+Space**; the inner agent session keeps its own
+`Ctrl+b`, so in-agent habits still work):
+
+| Chord | Effect |
+| --- | --- |
+| `prefix Space` | palette: agent/codex/shell/services windows, git popup, doctor |
+| `prefix v` | `vibe clip` and type the container path into the agent pane |
+| `prefix g` | host git popup in the repo root (lazygit when installed) |
+| `prefix r` | respawn a dead agent pane (it stays visible on exit) |
+| `prefix R` | reload tmux-ui.conf |
+| `Alt+←→↑↓` / `Alt+1..9` | move between panes / windows, no prefix |
+
+Tabs are clickable (mouse is on), and the `+` at the right end of the status
+bar opens a new host window. The config lives at `src/config/tmux-ui.conf`
+on its own socket — your personal `~/.tmux.conf` and default tmux server are
+never touched.
+
 Windows Terminal bindings worth adding for pane-heavy layouts (all unbound
 by default; Settings → "Open JSON file"). Recent WT splits these across two
 top-level arrays — actions declare what, keybindings declare the keys:

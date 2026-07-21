@@ -187,3 +187,39 @@ designed; entries here are one paragraph of intent, not a spec.
   cross-project fleet view, and dashboard-coupled worktrees. The trade: we
   keep ~2K LoC of bash and take the herdr headline (state at a glance,
   attention on blocked), not the herdr platform.
+
+- **SUPERSEDED (2026-07-21, later same day): "REJECTED — tmux as the one
+  true UI" is overturned; `vibe ui` (host-side riced tmux) shipped as
+  phase 1.** What changed since the morning record: (a) Chris's actual
+  pre-`vibe open` workflow is one WT tab for `vibe agent` plus a SECOND WT
+  tab for host-side work (git on the not-yet-moved side, `vibe clip`) —
+  per-terminal wrappers can't fold that into one surface, tmux can;
+  (b) the 3.7b sixel spike had already validated a source-built host tmux
+  on the WT host, killing the "host tmux is 3.5a" objection; (c) the
+  cross-project "spaces" ambition (herdr-style sidebar) needs a host-side
+  server anyway — placing the UI server on the HOST from day one means
+  spaces later is just more sessions on the same socket, never a third
+  nesting layer. What did NOT change: the layout-vs-persistence split
+  stands — the host tmux (`-L vibe` socket, `src/config/tmux-ui.conf`)
+  replaces Windows Terminal as the layout owner, while the container's
+  per-agent tmux sessions keep persistence untouched (`./vibe agent` in a
+  pane, `VIBE_NESTED=1` drops the inner status bar). The no-polling stance
+  also stands: `status-interval 0`, no `#()` segments; state lands
+  event-driven when the agent-state hook item wires `@vibe_state` (its
+  design gains one delta: state files must be host-readable — bind-mount
+  the runtime state dir — for the host status bar to render them).
+  Consequences for open items: `vibe open` stays as the non-tmux adapter
+  but its layout-DSL graduation is likely superseded by tmux layout
+  definitions — revisit before building the DSL; the "agent state at a
+  glance" item now renders INTO the vibe socket's status line (tab dots +
+  a second status line as the agents strip) instead of per-WT-pane bars;
+  the container tmux.conf ≤5-line budget applies only to the INNER conf
+  (unchanged) — the riced budget lives host-side in tmux-ui.conf. Phase 2
+  (spaces): session-per-project already works (per-checkout identity
+  falls back to the unique project name on basename collision —
+  two-clone test green in-container 2026-07-21); a session picker popup
+  (`choose-tree` or fzf) + `vibe ps` palette upgrade complete it. Still
+  host-unverified as of this record: nested sixel (`vibe show` through
+  host-tmux → container-tmux passthrough), shift+tab extended-keys
+  through the nested pair, clickable "+" user-range mouse value, WT
+  rendering of the theme.
