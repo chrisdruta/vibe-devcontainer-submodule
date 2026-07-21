@@ -5,6 +5,20 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Agent-state dots now track background sessions too.** Background/daemon
+  fork-sessions of an agent (e.g. Claude background jobs) inherit the
+  identity env but not `$TMUX`, so their hook events updated the state
+  file (`vibe ps` said `working`) while the tui tab dot tracked only the
+  foreground session — the known v1 fidelity gap from the title-channel
+  smoke. agent-entry.sh now mints `VIBE_AGENT_CARRIER=tmux|none` alongside
+  the identity (same single cmd-array env prefix, computed from the same
+  condition that picks the tmux branch), and the hook's title-channel
+  guard accepts `$TMUX` *or* an inherited `carrier=tmux`. `DEV_AGENT_TMUX=0`
+  runs stay `carrier=none`, so they still can't stomp the title of an
+  unrelated same-named tmux session. Live from the checkout; no rebuild,
+  no settings re-merge (same hook script, same registrations). Takes
+  effect per agent on its next relaunch (running agents keep their
+  pre-carrier env).
 - **New: revdiff — read-only diff review (rebuild required).** The
   2026-07-21 yazi re-evaluation split the review story in two: yazi stays
   the general read-only browser (and image surface), and

@@ -132,7 +132,19 @@ fi
 # direct-exec path below cannot disagree; on -A reattach the fresh mint is
 # discarded with the unused command string and the pane's original run
 # keeps its identity — that run is what the state records describe.
-cmd=(env "VIBE_AGENT_SESSION=$session" "VIBE_AGENT_INSTANCE=$$.$(date +%s)")
+#
+# CARRIER tells the hook whether this identity's run lives inside the inner
+# tmux session named $session — computed here from the SAME condition that
+# picks the tmux branch below. The hook needs it because background/daemon
+# forks of an agent (Claude fork-session jobs) inherit the identity env but
+# not $TMUX: with carrier=tmux their events may still drive the title
+# channel (the state dot), while DEV_AGENT_TMUX=0 runs stay carrier=none
+# and can never stomp the title of an unrelated same-named tmux session.
+carrier=none
+if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
+  carrier=tmux
+fi
+cmd=(env "VIBE_AGENT_SESSION=$session" "VIBE_AGENT_INSTANCE=$$.$(date +%s)" "VIBE_AGENT_CARRIER=$carrier")
 
 # With DEV_AGENT_TMUX=1 the agent runs inside a tmux session: it survives a
 # dropped terminal, and a second `vibe agent` reattaches (-A) instead of
@@ -140,7 +152,7 @@ cmd=(env "VIBE_AGENT_SESSION=$session" "VIBE_AGENT_INSTANCE=$$.$(date +%s)")
 # env-run.sh — never into the tmux server or an interactive shell. tmux takes
 # the pane command as a shell string, hence the one remaining %q re-quote.
 cmd+=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
-if [ "${DEV_AGENT_TMUX:-0}" = "1" ] && [ -z "${TMUX:-}" ]; then
+if [ "$carrier" = "tmux" ]; then
   # Under `vibe tui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
   # already draws tabs and chrome — drop this inner session's status bar so
   # the agent pane shows exactly one. Chained after new-session so it also

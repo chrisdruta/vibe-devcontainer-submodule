@@ -68,11 +68,15 @@ record="$state $instance $(date +%s) ${VIBE_AGENT_EXIT:-}"
 { printf '%s\n' "$record" >"$state_file.tmp.$$" &&
   mv -f "$state_file.tmp.$$" "$state_file"; } 2>/dev/null || true
 
-# Title channel — only when this agent actually runs inside the inner tmux
-# ($TMUX inherited from the pane process). Guarding on $TMUX (not just
-# has-session) keeps a DEV_AGENT_TMUX=0 run from stomping the title of an
-# unrelated tmux session that happens to share the name.
-[ -n "${TMUX:-}" ] || exit 0
+# Title channel — only when this identity's run lives in the inner tmux:
+# either $TMUX is inherited from the pane process, or agent-entry.sh minted
+# VIBE_AGENT_CARRIER=tmux alongside the identity. The carrier covers
+# background/daemon fork-sessions (they inherit the identity env but not
+# $TMUX — without it their events reached the state file but never the
+# dot). Guarding on carrier (not just has-session) keeps a
+# DEV_AGENT_TMUX=0 run from stomping the title of an unrelated tmux
+# session that happens to share the name.
+[ -n "${TMUX:-}" ] || [ "${VIBE_AGENT_CARRIER:-}" = "tmux" ] || exit 0
 command -v tmux >/dev/null 2>&1 || exit 0
 
 # Project field from the per-checkout identity, sanitized: the title string
