@@ -50,7 +50,10 @@ designed; entries here are one paragraph of intent, not a spec.
   which is the same class of solution maintained upstream. The remaining
   harness-owned render code is the small `vibe show` one-shot path
   (preview-lib.sh); if THAT grows or breaks repeatedly, fold it into yazi
-  usage or revisit. The host launcher, installer, and lifecycle scripts
+  usage or revisit. Standing caveat (2026-07-21): yazi is the incumbent for
+  dedicated image review, not a settled commitment — with tmux 3.7b's
+  sixel retention, simpler viewers (or plain `vibe show` in a split)
+  compete again; re-evaluate after the 3.7b rebuild validation. The host launcher, installer, and lifecycle scripts
   stay bash regardless — they are the bootstrap and must run on stock
   macOS bash 3.2 with nothing installed.
 
@@ -149,12 +152,18 @@ designed; entries here are one paragraph of intent, not a spec.
   yazi all emit the same sixel/kitty/iTerm2 sequences, and tmux ingests but
   does not reliably re-emit sixel on redraw (tmux #4499/#4639/#5126), which
   is exactly the "agent TUI redrawing in one pane, image in the split next
-  to it" case. Swapping renderers changes nothing inside tmux. Nor does
-  upgrading tmux (checked 2026-07-21): we ship Debian stable's 3.5a-3 via
-  apt — never pinned — and while 3.6/3.7 (3.7b released 2026-07-01) landed
-  sixel improvements, the redraw-artifact issue #5126 is still open on 3.6b
-  and next-3.7 regressed sixel persistence differently; a source build
-  would buy churn, not the unlock. The devcontainer boundary is a non-issue
+  to it" case. Swapping renderers changes nothing inside tmux. AMENDED
+  2026-07-21, same day: the "upgrading tmux buys churn, not the unlock"
+  reading of the open issues was WRONG empirically — a dogfood spike
+  (source-built 3.7b `--enable-sixel` on an isolated socket, WT host)
+  showed bare `chafa -f sixel` images PERSISTING through adjacent-pane TUI
+  redraws, the exact 3.5a failure. Resizes (pane or host window) still
+  clear images — upstream reflow behavior, acceptable. tmux 3.7b + chafa
+  1.18.2 are now pinned source builds in the Dockerfile; remaining
+  in-image validation after rebuild: prefix+i wiring (the spike's failure
+  was a socket mismatch, not 3.7b), whether `vibe show` can drop
+  `--passthrough tmux` for native ingest, and whether the review window
+  can become a split. The devcontainer boundary is a non-issue
   (escapes pass through the `docker exec` TTY; DA1 probing already bails
   under `$TMUX` in preview-lib.sh).
   **NOT NOW — kitty-graphics Unicode-placeholder path.** The one real

@@ -4,6 +4,55 @@ ARG UV_VERSION=0.11.28
 ARG BASE_IMAGE=mcr.microsoft.com/devcontainers/base:debian
 
 FROM ghcr.io/astral-sh/uv:${UV_VERSION} AS uv
+
+# tmux + chafa are built from source, not apt: Debian stable ships tmux 3.5a,
+# which drops sixel images whenever a pane redraws (upstream #4499/#4639) —
+# 3.7b retains them across adjacent-pane TUI redraws (verified by dogfood
+# spike 2026-07-21; a resize still clears images, that reflow behavior is
+# upstream). Debian's chafa 1.14.5 predates --probe (yazi's cell-art
+# fallback) and the newer kitty/passthrough work; building from source also
+# sidesteps the missing upstream arm64 static binaries. Staged into
+# /opt/stage and copied into the final image; runtime libs are apt-installed
+# there explicitly.
+FROM ${BASE_IMAGE} AS term-build
+ARG TMUX_VERSION=3.7b
+ARG TMUX_SHA256=87f2e99e3b685973f2ca002ffd6ed7e51a5744f7009daae5a15670b6d532db96
+ARG CHAFA_VERSION=1.18.2
+ARG CHAFA_SHA256=0b8d9ba9f347e8b6c0c71878217c9b0e478b4a42aa4babea0bf20840567239c2
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        build-essential \
+        byacc \
+        ca-certificates \
+        curl \
+        libevent-dev \
+        libglib2.0-dev \
+        libjpeg62-turbo-dev \
+        libncurses-dev \
+        libpng-dev \
+        libwebp-dev \
+        pkg-config \
+        xz-utils
+RUN tmp="$(mktemp -d)" && cd "$tmp" \
+    && curl -fsSL -o tmux.tar.gz \
+        "https://github.com/tmux/tmux/releases/download/${TMUX_VERSION}/tmux-${TMUX_VERSION}.tar.gz" \
+    && echo "${TMUX_SHA256}  tmux.tar.gz" | sha256sum -c - \
+    && tar xzf tmux.tar.gz && cd "tmux-${TMUX_VERSION}" \
+    && ./configure --prefix=/usr/local --enable-sixel \
+    && make -j"$(nproc)" \
+    && make DESTDIR=/opt/stage install \
+    && rm -rf "$tmp"
+RUN tmp="$(mktemp -d)" && cd "$tmp" \
+    && curl -fsSL -o chafa.tar.xz \
+        "https://hpjansson.org/chafa/releases/chafa-${CHAFA_VERSION}.tar.xz" \
+    && echo "${CHAFA_SHA256}  chafa.tar.xz" | sha256sum -c - \
+    && tar xJf chafa.tar.xz && cd "chafa-${CHAFA_VERSION}" \
+    && ./configure --prefix=/usr/local \
+    && make -j"$(nproc)" \
+    && make DESTDIR=/opt/stage install \
+    && rm -rf "$tmp"
+
 FROM ${BASE_IMAGE}
 
 # Installer pipelines (curl | bash) must fail the build, not silently no-op
@@ -46,7 +95,6 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     && apt-get install -y --no-install-recommends \
         build-essential \
         ca-certificates \
-        chafa \
         curl \
         fd-find \
         file \
@@ -55,17 +103,28 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
         git-lfs \
         jq \
         less \
+        libevent-core-2.1-7t64 \
+        libglib2.0-0t64 \
+        libjpeg62-turbo \
+        libncursesw6 \
+        libpng16-16t64 \
         libsixel-bin \
+        libwebp7 \
         procps \
         ripgrep \
         shellcheck \
         shfmt \
-        tmux \
         unzip \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
     && rm -f /etc/sudoers.d/vscode
+
+# Source-built tmux (sixel-enabled) + chafa from the term-build stage; the
+# libevent/glib/jpeg/png/webp/ncursesw runtime packages above are their
+# dynamic dependencies. ldconfig registers libchafa in /usr/local/lib.
+COPY --from=term-build /opt/stage/usr/local/ /usr/local/
+RUN ldconfig
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 COPY config/tmux.conf /etc/tmux.conf

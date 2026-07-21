@@ -5,6 +5,20 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **tmux 3.7b + chafa 1.18.2, built from source (rebuild required).** Debian
+  stable pins tmux 3.5a and chafa 1.14.5; both moved from apt to a pinned,
+  checksummed source-build stage in the Dockerfile (`TMUX_VERSION`/
+  `CHAFA_VERSION` ARGs, `--enable-sixel`). Why: a 2026-07-21 dogfood spike
+  showed 3.7b retains sixel images while an agent TUI redraws in the
+  adjacent split — the exact case 3.5a degraded to placeholders, and the
+  reason the review window is a full window instead of a split (a resize
+  still clears images; that reflow behavior is upstream). chafa 1.18.2
+  brings `--probe` (yazi's cell-art fallback — doctor's NOTE about it now
+  passes) and the newer kitty/passthrough work; source-building also ends
+  the missing-upstream-arm64-static problem. Behavior is otherwise
+  unchanged: `vibe show` keeps `--passthrough tmux` inside tmux until the
+  native-ingest path is validated in-image (see BACKLOG); if it holds, the
+  full-window review workaround can be revisited.
 - **New: `vibe-svc` — the services session is real now.** The docs promised
   "a services session your post-start hook stands up, `vibe attach` is the
   door in" with no machinery behind it. `vibe-svc NAME COMMAND...` (baked
