@@ -103,6 +103,8 @@ Commands:
               agent pane | host shell pane, tabbed windows, palette on
               prefix+Space (needs tmux >= 3.4 on the host; pinned 3.7b
               build: src/scripts/host/install-tmux.sh)
+              (--kill: stop the UI server — all projects' tui sessions,
+               container agents unaffected; --fresh: --kill, then relaunch)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Browse/review images with yazi; A approves, R rejects (with
@@ -455,8 +457,11 @@ case "$command_name" in
     if [ "$command_name" = "ui" ]; then
       echo "(vibe ui is now: vibe tui)" >&2
     fi
-    ensure_up
-    exec bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name"
+    # --kill only stops the UI server — don't boot containers for that.
+    if [ "${1:-}" != "--kill" ]; then
+      ensure_up
+    fi
+    exec bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name" "$@"
     ;;
   *)
     echo "Unknown command: $command_name" >&2

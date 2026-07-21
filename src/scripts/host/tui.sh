@@ -12,29 +12,67 @@
 set -euo pipefail
 
 if [ "$#" -lt 4 ]; then
-  echo "Usage: tui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME" >&2
-  echo "(normally invoked via: vibe tui)" >&2
+  echo "Usage: tui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME [--kill|--fresh]" >&2
+  echo "(normally invoked via: vibe tui [--kill|--fresh])" >&2
   exit 2
 fi
 repo_root="$1"
 ws_base="$2"
 harness_dir="$3"
 project_name="$4"
+action="launch"
+case "${5:-}" in
+  '') ;;
+  --kill) action="kill" ;;
+  --fresh) action="fresh" ;;
+  *)
+    echo "vibe tui: unknown flag: $5 (known: --kill, --fresh)" >&2
+    exit 2
+    ;;
+esac
 
 socket="vibe"
 conf="$harness_dir/src/config/tmux-tui.conf"
 tmux_bin="${VIBE_TUI_TMUX:-tmux}"
 
-if [ -n "${TMUX:-}" ]; then
-  echo "vibe tui hosts its own tmux — run it from a plain terminal." >&2
-  echo "(already on the vibe socket? switch with: tmux -L vibe switch-client -t <session>)" >&2
-  exit 1
-fi
-
 if ! command -v "$tmux_bin" >/dev/null 2>&1; then
   echo "vibe tui needs tmux on the host. Install the pinned 3.7b build:" >&2
   echo "  bash $harness_dir/src/scripts/host/install-tmux.sh" >&2
   echo "(a distro tmux >= 3.4 also works, but sixel image previews degrade below 3.7)" >&2
+  exit 1
+fi
+
+# --kill / --fresh: stop the UI server — the reset story ("how do I get
+# back to a clean tui?") as a first-class flag instead of folklore. Kills
+# every project's tui session on the socket; container agent sessions are
+# a different server and are untouched. Runs BEFORE the $TMUX guard: it's
+# an admin op that must work from anywhere (from inside the tui itself it
+# is prefix+Q with more typing — the client just dies with the server).
+if [ "$action" != "launch" ]; then
+  kill_out="$("$tmux_bin" -L "$socket" kill-server 2>&1)" || true
+  case "$kill_out" in
+    *"no server"* | *"error connecting"*)
+      echo "vibe tui: no UI server on socket '$socket' — nothing to kill."
+      ;;
+    *"protocol version mismatch"*)
+      echo "The running vibe tui server was started by an incompatible tmux." >&2
+      echo "Kill it with the binary that started it (usually the distro one):" >&2
+      echo "  /usr/bin/tmux -L $socket kill-server" >&2
+      exit 1
+      ;;
+    "")
+      echo "vibe tui: UI server killed (container agent sessions untouched)."
+      ;;
+    *)
+      printf '%s\n' "$kill_out" >&2
+      ;;
+  esac
+  [ "$action" = "kill" ] && exit 0
+fi
+
+if [ -n "${TMUX:-}" ]; then
+  echo "vibe tui hosts its own tmux — run it from a plain terminal." >&2
+  echo "(already on the vibe socket? switch with: tmux -L vibe switch-client -t <session>)" >&2
   exit 1
 fi
 
