@@ -457,10 +457,27 @@ case "$command_name" in
     if [ "$command_name" = "ui" ]; then
       echo "(vibe ui is now: vibe tui)" >&2
     fi
-    # --kill only stops the UI server — don't boot containers for that.
-    if [ "${1:-}" != "--kill" ]; then
-      ensure_up
-    fi
+    case "${1:-}" in
+      --kill | --fresh)
+        # Kill via tui.sh, then reap the ghost viewers the kill just
+        # orphaned: docker never kills an exec'd process with its client,
+        # so the dead panes' inner tmux clients linger and inflate
+        # attached counts. Only when the container is ALREADY running —
+        # never boot one to clean a UI (and with no container there are
+        # no orphans to reap).
+        bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name" --kill
+        cid="$(container_id)" || cid=""
+        if [ -n "$cid" ]; then
+          cexec "$cid" bash .vibe/harness/src/scripts/agent-entry.sh reap-nested || true
+        fi
+        if [ "$1" = "--kill" ]; then
+          exit 0
+        fi
+        ensure_up
+        exec bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name"
+        ;;
+    esac
+    ensure_up
     exec bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name" "$@"
     ;;
   *)
