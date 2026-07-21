@@ -49,13 +49,25 @@ self-update therefore does not stick — update Grok by rebuilding the image.
 
 ## Worktrees and naming
 
-The volume name uses only the workspace folder **basename**:
+Everything **except this volume** — containers, sidecars, network, image
+tags — is namespaced by a per-checkout project identity
+(`vibe-<basename>-<8-hex suffix>`, persisted in `.vibe/.project-id`, never
+committed), so two checkouts named `app` in different places run fully
+independent stacks and `vibe down` in one can never touch the other. A
+checkout that already ran under the old unsuffixed name keeps it (adopted
+automatically on the next `vibe` command). Deleting `.vibe/.project-id`
+regenerates the same identity for an unmoved checkout; moving a checkout
+keeps its identity because the file moves with it.
+
+The volume name, by contrast, uses only the workspace folder **basename**
+(a compatibility ABI — changing it would log every consumer out):
 
 - Different worktree folder names (`my-project`, `my-project-feature-x`) get
   **separate** state volumes → separate logins, full isolation.
 - Two projects whose folders share a basename (e.g. `~/dev/a/app` and `~/dev/b/app`)
-  **collide** on the same volume — rename one folder, or change the volume `source=`
-  in that project's `compose.yaml` to a unique key.
+  **share** the volume — same logins in both (their containers stay separate).
+  Rename one folder, or change the volume `source=`
+  in that project's `compose.yaml` to a unique key, if you want separate logins.
 - The same `source=` edit can also **deliberately** share one volume — logins and
   session history included — across projects. That trades away per-project
   isolation; see [positioning.md](positioning.md#why-logins-are-per-project)

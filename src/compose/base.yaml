@@ -4,7 +4,9 @@
 #
 # The `vibe` launcher invokes compose as:
 #   docker compose \
-#     --project-name  vibe-<basename>          # sanitized workspace basename
+#     --project-name  vibe-<basename>-<suffix>  # per-checkout identity from
+#                                                # .vibe/.project-id (pre-suffix
+#                                                # checkouts: no suffix)
 #     --project-directory "$repo_root" \
 #     -f .vibe/harness/src/compose/base.yaml \
 #     -f .vibe/compose.yaml \

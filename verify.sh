@@ -47,6 +47,76 @@ else
   echo "SKIP: docker unavailable; bash-3.2 syntax gate not run"
 fi
 
+# Project-identity helpers: pure-bash unit checks (no docker, no daemon).
+# shellcheck source=src/scripts/repo-root.sh
+. "$repo_root/src/scripts/repo-root.sh"
+slug="$(vibe_project_slug "/tmp/My App (v2)")"
+[ "$slug" = "vibe-my-app--v2-" ] \
+  || { echo "FAIL: vibe_project_slug sanitization: got '$slug'" >&2; exit 1; }
+suffix_a="$(vibe_checkout_suffix "$repo_root")"
+suffix_b="$(vibe_checkout_suffix "$repo_root")"
+case "$suffix_a" in
+  *[!0-9a-f]* | "")
+    echo "FAIL: vibe_checkout_suffix not hex: '$suffix_a'" >&2; exit 1 ;;
+esac
+[ "${#suffix_a}" -eq 8 ] \
+  || { echo "FAIL: vibe_checkout_suffix length ${#suffix_a}, want 8" >&2; exit 1; }
+[ "$suffix_a" = "$suffix_b" ] \
+  || { echo "FAIL: vibe_checkout_suffix not deterministic" >&2; exit 1; }
+[ "$suffix_a" != "$(vibe_checkout_suffix /tmp)" ] \
+  || { echo "FAIL: vibe_checkout_suffix identical for different paths" >&2; exit 1; }
+echo "Project-identity helper checks passed."
+
+# Identity resolution end-to-end through the real launcher, docker stubbed
+# (branch coverage for .project-id: seed, respect, reseed-on-corrupt,
+# legacy adoption, daemon-down non-persistence). Runs anywhere bash runs.
+id_tmp="$(mktemp -d)"
+mkdir -p "$id_tmp/bin" "$id_tmp/app/.vibe"
+cat >"$id_tmp/bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+# verify.sh stub: `compose ...` succeeds silently; `ps` obeys FAKE_* envs.
+case "${1:-}" in
+  ps)
+    [ -n "${FAKE_DAEMON_DOWN:-}" ] && { echo "daemon down" >&2; exit 1; }
+    printf '%s' "${FAKE_LEGACY_IDS:-}"
+    ;;
+esac
+exit 0
+SHIM
+chmod +x "$id_tmp/bin/docker"
+: >"$id_tmp/app/.vibe/compose.yaml"
+git -C "$id_tmp/app" init -q
+id_vibe() (
+  cd "$id_tmp/app" \
+    && PATH="$id_tmp/bin:$PATH" VIBE_SKIP_CONTAINER_DISPATCH=1 \
+       bash "$repo_root/vibe" config >/dev/null 2>&1
+)
+id_file="$id_tmp/app/.vibe/.project-id"
+want_fresh="vibe-app-$(vibe_checkout_suffix "$id_tmp/app")"
+
+id_vibe
+[ "$(cat "$id_file")" = "$want_fresh" ] \
+  || { echo "FAIL: fresh checkout id: got '$(cat "$id_file")', want '$want_fresh'" >&2; exit 1; }
+grep -qxF '.vibe/.project-id' "$id_tmp/app/.git/info/exclude" \
+  || { echo "FAIL: .project-id not in .git/info/exclude" >&2; exit 1; }
+id_vibe
+[ "$(cat "$id_file")" = "$want_fresh" ] \
+  || { echo "FAIL: id not stable across runs" >&2; exit 1; }
+printf 'NOT A VALID name!\n' >"$id_file"
+id_vibe
+[ "$(cat "$id_file")" = "$want_fresh" ] \
+  || { echo "FAIL: corrupt id not reseeded" >&2; exit 1; }
+rm -f "$id_file"
+FAKE_LEGACY_IDS="abc123" id_vibe
+[ "$(cat "$id_file")" = "vibe-app" ] \
+  || { echo "FAIL: legacy adoption: got '$(cat "$id_file")', want 'vibe-app'" >&2; exit 1; }
+rm -f "$id_file"
+FAKE_DAEMON_DOWN=1 id_vibe || true
+[ ! -e "$id_file" ] \
+  || { echo "FAIL: id persisted while the daemon was unreachable" >&2; exit 1; }
+rm -rf "$id_tmp"
+echo "Project-identity resolution checks passed."
+
 # 2. Install each preset into a scratch git repo and validate the result.
 # Submodule add clones this repository's HEAD, so uncommitted changes are invisible.
 if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then

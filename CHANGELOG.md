@@ -5,6 +5,27 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **Fix: per-checkout project identity — same-named checkouts no longer
+  share a compose namespace.** The project name was derived from the
+  workspace basename alone, so `~/dev/a/app` and `~/dev/b/app` collided on
+  the ENTIRE compose project — containers, sidecars, network, image tags —
+  and `vibe up`/`vibe down` in one could recreate or tear down the other
+  (the docs only ever admitted the agent-state volume overlap). The
+  identity is now `vibe-<basename>-<8-hex suffix>`, seeded from the
+  canonical checkout path into `.vibe/.project-id` on first use (per
+  checkout, auto-ignored via `.git/info/exclude`, worktree-friendly). The
+  FILE is the identity: moving a checkout keeps its containers; deleting
+  the file regenerates the same suffix in place. Checkouts that already
+  ran under the unsuffixed name adopt it automatically (probed via
+  compose's own project + working-dir labels, so a *different* same-named
+  repo can never trigger adoption), and nothing is persisted when the
+  docker daemon is unreachable, so a bad moment can't mint a wrong
+  identity. The agent-state volume name intentionally still derives from
+  the bare basename — that sharing is documented ABI
+  (docs/agent-state.md). verify.sh now covers the full branch matrix
+  through the real launcher with a stubbed docker; the in-container
+  command dispatch gained a `VIBE_SKIP_CONTAINER_DISPATCH` dev escape
+  hatch to make that possible.
 - **tmux 3.7b + chafa 1.18.2, built from source (rebuild required).** Debian
   stable pins tmux 3.5a and chafa 1.14.5; both moved from apt to a pinned,
   checksummed source-build stage in the Dockerfile (`TMUX_VERSION`/

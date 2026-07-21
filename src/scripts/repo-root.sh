@@ -28,6 +28,36 @@ vibe_dir_name_for_root() {
   fi
 }
 
+# Project-identity helpers (used by the identity block in `vibe`).
+#
+# vibe_project_slug ROOT prints the sanitized basename-derived project
+# name ("vibe-<basename>"): lowercase, [a-z0-9_-] only. This is the
+# HUMAN-READABLE PREFIX of the project identity — alone it collides
+# across same-named checkouts, which is why `vibe` appends a
+# per-checkout suffix (see vibe_checkout_suffix).
+vibe_project_slug() {
+  printf 'vibe-%s' "$(basename -- "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g')"
+}
+
+# vibe_checkout_suffix ROOT prints a short stable per-checkout token:
+# the first 8 hex chars of a digest of the canonical (symlink-resolved)
+# checkout path. Deterministic on purpose — a deleted project-id file
+# regenerates the same identity for an unmoved checkout, so its
+# containers are re-adopted rather than orphaned. sha256sum is coreutils
+# (Linux); shasum ships with stock macOS; cksum is the POSIX last resort.
+vibe_checkout_suffix() {
+  local canonical digest
+  canonical="$(cd -- "$1" && pwd -P)" || return 1
+  if command -v sha256sum >/dev/null 2>&1; then
+    digest="$(printf '%s' "$canonical" | sha256sum)"
+  elif command -v shasum >/dev/null 2>&1; then
+    digest="$(printf '%s' "$canonical" | shasum -a 256)"
+  else
+    digest="$(printf '%s' "$canonical" | cksum)"
+  fi
+  printf '%s' "$digest" | tr -dc '0-9a-f' | cut -c1-8
+}
+
 find_repo_root_from_pwd() {
   local dir="$PWD"
   while [ "$dir" != "/" ]; do

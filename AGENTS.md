@@ -27,7 +27,11 @@ consuming project — bias toward small, reviewable, backward-compatible commits
 - The agent-state volume name (`agent-state-<workspace-basename>`) is an ABI:
   changing it logs every consumer out of every agent. So are the `src/*` paths
   seeded consumer files reference (`.vibe/harness/src/scripts/...` in
-  .claude/settings.json and seeded AGENTS.md).
+  .claude/settings.json and seeded AGENTS.md). The compose project identity is
+  deliberately NOT basename-derived: it is per checkout
+  (`vibe-<basename>-<suffix>`, persisted in `.vibe/.project-id`,
+  git-info/exclude'd) — the id FILE is the identity, and checkouts that
+  predate it adopt their legacy unsuffixed name via the label probe in `vibe`.
 - Lifecycle scripts stay idempotent and honor `DEV_BOOTSTRAP_STRICT`; `vibe up`
   runs post-create once per container (`/var/tmp/.vibe-post-created` marker)
   and post-start on every actual start.
