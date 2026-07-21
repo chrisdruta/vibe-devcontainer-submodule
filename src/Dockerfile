@@ -27,6 +27,7 @@ RUN apt-get update \
         ca-certificates \
         curl \
         libevent-dev \
+        libfreetype6-dev \
         libglib2.0-dev \
         libjpeg62-turbo-dev \
         libncurses-dev \
@@ -104,12 +105,14 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
         jq \
         less \
         libevent-core-2.1-7t64 \
+        libfreetype6 \
         libglib2.0-0t64 \
         libjpeg62-turbo \
         libncursesw6 \
         libpng16-16t64 \
         libsixel-bin \
         libwebp7 \
+        libwebpdemux2 \
         procps \
         ripgrep \
         shellcheck \
@@ -121,8 +124,11 @@ RUN rm -f /etc/apt/sources.list.d/yarn.list \
     && rm -f /etc/sudoers.d/vscode
 
 # Source-built tmux (sixel-enabled) + chafa from the term-build stage; the
-# libevent/glib/jpeg/png/webp/ncursesw runtime packages above are their
-# dynamic dependencies. ldconfig registers libchafa in /usr/local/lib.
+# libevent/freetype/glib/jpeg/png/webp(+demux)/ncursesw runtime packages
+# above are their dynamic dependencies — keep them in lockstep with what the
+# term-build stage compiles against (`ldd /usr/local/bin/chafa` after a
+# rebuild must show no "not found"). ldconfig registers libchafa in
+# /usr/local/lib.
 COPY --from=term-build /opt/stage/usr/local/ /usr/local/
 RUN ldconfig
 
