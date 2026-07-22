@@ -8,8 +8,21 @@ does not make running untrusted code safe.
 
 The container is the isolation boundary, and the harness is built so a process
 **inside** the container cannot reach **host** execution or the docker daemon by
-tampering with files it can write. That property is the **host root of trust**
-below.
+tampering with the host-executed harness files it can write. That property is the
+**host root of trust** below.
+
+**What is trusted.** The harness runs *your project's* own compose config,
+Dockerfile, and code, with your docker — deliberately. It is a guardrail against
+a **compromised container process** escaping to the host, not a jail that makes
+running **untrusted project code** safe. The `vibe up` compose gate hard-enforces
+the container-hardening invariants (so a compromised container that rewrites
+`.vibe/compose.yaml` toward `privileged`/a docker socket/a host bind is caught),
+and best-effort refuses compose features that read host files or run host
+binaries — but Docker itself documents compose as not a security boundary, so a
+*maliciously authored* compose file is not proven contained. Pointing the harness
+at code or a compose file you do not trust calls for a disposable clone, minimal
+credentials, and the planned `--jailed` profile — the installer and the
+first-contact prompt say so.
 
 ## Host root of trust
 

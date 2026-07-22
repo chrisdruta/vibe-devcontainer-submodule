@@ -564,18 +564,9 @@ vibe_snapshot_compose_inputs() {
     if [ -e "$snap/.vibe/$rel" ]; then printf 'present .vibe/%s\n' "$rel" >>"$snap/.inputs"
     else printf 'absent .vibe/%s\n' "$rel" >>"$snap/.inputs"; fi
   done
-  # Freeze the image-extension build context: rewrite a `context:` that points
-  # into .vibe to the absolute snapshot path, so `build` reads the frozen copy
-  # while --project-directory stays the repo root (workspace bind unaffected).
-  # A context that points ELSEWHERE (outside .vibe) can't be frozen here — leave
-  # it for the enforcer's structural check / --unsafe.
-  if [ -f "$snap/.vibe/compose.yaml" ]; then
-    local abs_vibe; abs_vibe="$(cd "$snap/.vibe" && pwd -P)"
-    # sed: `context: ./.vibe` or `context: .vibe` (optionally quoted) -> abs.
-    sed -E "s#(^[[:space:]]*context:[[:space:]]*[\"']?)\.?/?\.vibe([\"']?[[:space:]]*\$)#\\1$abs_vibe\\2#" \
-      "$snap/.vibe/compose.yaml" > "$snap/.vibe/compose.yaml.tmp" 2>/dev/null \
-      && mv "$snap/.vibe/compose.yaml.tmp" "$snap/.vibe/compose.yaml"
-  fi
+  # NOTE: the build-context freeze is done by vibe_freeze_build_context AFTER the
+  # source scan reads this (still-verbatim) snapshot copy, so scan and render see
+  # the same frozen bytes.
   return 0
 }
 
@@ -809,6 +800,22 @@ $set_key=$set_val"
   vibe_record_write "$file" $(printf '%s\n' "$pairs" | grep .)
 }
 
+# Freeze an image-extension build context that points into .vibe: rewrite it to
+# the absolute snapshot path so `build` reads the frozen copy (—project-directory
+# stays the repo root, workspace bind unaffected). Handles long-form
+# (`context: ./.vibe`, with/without trailing slash/quotes) and short-form
+# (`build: ./.vibe`). A context pointing elsewhere is left for the scan/enforcer.
+vibe_freeze_build_context() {
+  local snap="$1"
+  [ -f "$snap/.vibe/compose.yaml" ] || return 0
+  local abs_vibe; abs_vibe="$(cd "$snap/.vibe" && pwd -P)" || return 0
+  sed -E \
+    -e "s#(^[[:space:]]*context:[[:space:]]*[\"']?)\.?/?\.vibe/?([\"']?[[:space:]]*\$)#\\1$abs_vibe\\2#" \
+    -e "s#(^[[:space:]]*build:[[:space:]]*[\"']?)\.?/?\.vibe/?([\"']?[[:space:]]*\$)#\\1$abs_vibe\\2#" \
+    "$snap/.vibe/compose.yaml" > "$snap/.vibe/compose.yaml.tmp" 2>/dev/null \
+    && mv "$snap/.vibe/compose.yaml.tmp" "$snap/.vibe/compose.yaml"
+}
+
 # Scan the SOURCE project compose file ($1) for features that `docker compose
 # config` would normalize away (so a rendered-model grep can't see them) AND
 # that read host files or run host binaries at render/build time — the render
@@ -830,15 +837,17 @@ vibe_scan_source_compose() {
   # top-level or service configs:/secrets: (host file reads / secret surfaces).
   grep -Eq '^(configs|secrets):[[:space:]]*$|^[[:space:]]*(configs|secrets):[[:space:]]*(\[|$)' "$f" && v="$v configs-secrets"
   # Build contexts other than the frozen ./.vibe (the only one we snapshot).
+  # Both long-form (`context: X`) and short-form (`build: X`, a scalar — not the
+  # `build:` that opens a mapping, which has no value on the line).
   local ctx
   while IFS= read -r ctx; do
-    ctx="$(printf '%s' "$ctx" | sed -E 's/^[[:space:]]*context:[[:space:]]*//; s/[\"'"'"']//g; s#[[:space:]]*$##')"
+    ctx="$(printf '%s' "$ctx" | sed -E 's/^[[:space:]]*(context|build):[[:space:]]*//; s/[\"'"'"']//g; s#[[:space:]]*$##')"
     case "$ctx" in
       "" | ./.vibe | ./.vibe/ | .vibe | .vibe/) ;;
       *) v="$v build-context:$ctx" ;;
     esac
   done <<EOF
-$(grep -E '^[[:space:]]*context:' "$f" 2>/dev/null)
+$(grep -E '^[[:space:]]*context:[[:space:]]*[^[:space:]]|^[[:space:]]*build:[[:space:]]*[^[:space:]{]' "$f" 2>/dev/null)
 EOF
   if [ -n "$v" ]; then
     printf 'SOURCE COMPOSE VIOLATIONS:%s\n' "$v" >&2
@@ -868,9 +877,10 @@ vibe_compose_gate() {
 
   # SOURCE scan FIRST — before any render, because `compose config` both hides
   # these keys (normalization) and READS their referenced host files. Scan the
-  # real source file as data.
+  # FROZEN snapshot copy (verbatim, pre-context-rewrite) so scan and render see
+  # the same bytes; then freeze the build context for the render.
   local src_rc=0
-  vibe_scan_source_compose "$root/.vibe/compose.yaml" || src_rc=$?
+  vibe_scan_source_compose "$snap/.vibe/compose.yaml" || src_rc=$?
   if [ "$src_rc" = "2" ]; then
     if [ "$unsafe" = "--unsafe" ]; then unsafe_banner=1; else
       printf '\nRefusing to run: the project compose file uses a feature that reads host\n' >&2
@@ -879,6 +889,17 @@ vibe_compose_gate() {
       rm -rf "$snap"; return 1
     fi
   fi
+  # Drift hash over the FROZEN snapshot control files, computed BEFORE the
+  # context rewrite (which would inject the per-run absolute path and change the
+  # hash every invocation). Stable for an unchanged project; a Dockerfile/compose
+  # edit still changes it.
+  local cur_hash f
+  cur_hash="$( { cat "$snap/.inputs" 2>/dev/null; \
+                 for f in compose.yaml Dockerfile .dockerignore config.env; do \
+                   [ -f "$snap/.vibe/$f" ] && vibe_sha256_file "$snap/.vibe/$f"; \
+                 done; } | vibe_sha256_stdin )"
+
+  vibe_freeze_build_context "$snap"
 
   local rendered="$snap/rendered.yaml"
   if ! vibe_render_compose "$base" "$snap/.vibe/compose.yaml" "$root" "$pname" "$ws" "$hdir" >"$rendered"; then
@@ -902,15 +923,8 @@ vibe_compose_gate() {
     printf '\n*** --unsafe: the container boundary is DISABLED for this command. ***\n\n' >&2
   fi
 
-  # Drift check: hash the STABLE SOURCE control inputs (raw .vibe control-file
-  # CONTENT + present/absent ledger) — NOT the rendered model, whose per-run
-  # absolute snapshot path would otherwise change the hash every invocation and
-  # re-prompt endlessly (sol). A Dockerfile/compose edit still changes this hash.
-  local cur_hash rec_hash prev f
-  cur_hash="$( { cat "$snap/.inputs" 2>/dev/null; \
-                 for f in compose.yaml Dockerfile .dockerignore config.env; do \
-                   [ -f "$root/.vibe/$f" ] && vibe_sha256_file "$root/.vibe/$f"; \
-                 done; } | vibe_sha256_stdin )"
+  # Drift check against the recorded baseline (cur_hash computed above).
+  local rec_hash prev
   rec_hash="$(vibe_record_get "$record" compose_snapshot_hash 2>/dev/null || true)"
   prev="$home/state/snapshots/$digest.prev.yaml"
   if [ -n "$rec_hash" ] && [ "$rec_hash" != "$cur_hash" ]; then
@@ -1025,6 +1039,9 @@ vibe_first_contact() {
       printf '\n  !! This commit is not from a known release. Only trust it if you\n' >&2
       printf '     personally reviewed this exact harness checkout.\n' >&2 ;;
   esac
+  printf '\n  This trusts the project'\''s OWN compose config and code to run with\n' >&2
+  printf '  your docker (a guardrail, not a jail — use a disposable clone for\n' >&2
+  printf '  untrusted code; docs/security.md).\n' >&2
   printf '\nTrust this harness version for this project? [y/N]: ' >&2
   local ans; read -r ans
   case "$ans" in y|Y|yes|YES) ;; *) printf 'Aborted.\n' >&2; return 1 ;; esac

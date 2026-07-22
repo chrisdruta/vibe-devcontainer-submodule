@@ -458,6 +458,12 @@ if [[ $no_self -eq 0 ]]; then
 fi
 
 echo
+echo "TRUST: the harness runs YOUR project's compose config and code with your"
+echo "  docker. It is a guardrail against a compromised container reaching the"
+echo "  host — not a jail for untrusted project code. If you are pointing it at"
+echo "  code or a compose file you do NOT trust, use a disposable clone and"
+echo "  minimal credentials (docs/security.md)."
+echo
 echo "Next:"
 echo "  1. Review .vibe/compose.yaml and config.env"
 echo "  2. Add '@.vibe/AGENTS.md' to the project's CLAUDE.md or AGENTS.md"
