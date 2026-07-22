@@ -39,6 +39,8 @@ fi
 session="${DEV_ATTACH_TMUX_SESSION:-services}"
 
 # tmux takes the window command as one shell string; %q keeps args intact.
+# (With agent-entry.sh's two, this is the sanctioned tmux shell-string
+# boundary — do not add another site.)
 cmd="$(printf '%q ' "$@")"
 
 pin() { # window-name idempotency needs tmux's auto-rename off per window

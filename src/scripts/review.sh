@@ -111,6 +111,15 @@ case "${1:-}" in
   --ensure | --focus)
     session="${2:-}"
     [ -n "$session" ] || exit 0
+    # Charset gate before $session reaches the single-quoted window_cmd
+    # below: every real caller passes a tmux session id ("$3") or a
+    # harness-minted session name, but this file is also PATH-exposed as
+    # vibe-preview — refuse anything outside that shape instead of handing
+    # it to a tmux command string. Silent exit, like every other miss in
+    # this best-effort path.
+    case "$session" in
+      *[!A-Za-z0-9_\$-]*) exit 0 ;;
+    esac
     window_cmd="exec bash '$self' --window '$session'"
     if [ "$1" = "--focus" ]; then
       tmux select-window -t "${session}:=${WINDOW_NAME}" 2>/dev/null && exit 0

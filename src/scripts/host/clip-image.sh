@@ -130,8 +130,11 @@ if [ -z "$dest_dir" ]; then
   fi
   # Stream into the container as base64 so tty/stdin handling can't mangle
   # binary bytes. /tmp is container-local: survives detach, gone on rebuild.
-  base64 <"$host_png" | docker exec -i -u vscode "$container" \
-    bash -c "base64 -d >'$container_path'"
+  # The target path is harness-minted here, but pass it via the environment
+  # anyway: no command string crossing the docker boundary ever interpolates
+  # data (the blanket rule everywhere else in the harness).
+  base64 <"$host_png" | docker exec -i -u vscode -e "CLIP_PATH=$container_path" \
+    "$container" bash -c 'base64 -d >"$CLIP_PATH"'
 else
   echo "Saved: $dest_dir/$file_name"
 fi
