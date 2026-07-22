@@ -154,17 +154,27 @@ cmd=(env "VIBE_AGENT_SESSION=$session" "VIBE_AGENT_INSTANCE=$$.$(date +%s)" "VIB
 cmd+=("$script_dir/env-run.sh" "${agent_cmd[@]}" "$@")
 if [ "$carrier" = "tmux" ]; then
   # Under `vibe tui` (VIBE_NESTED=1, forwarded by cexec) an outer host tmux
-  # already draws tabs and chrome — drop this inner session's status bar so
-  # the agent pane shows exactly one. Chained after new-session so it also
-  # applies when -A reattaches a session created without the flag.
+  # already draws tabs and chrome, and THIS session is an engine, not a UI
+  # (persistence + scrollback) — so drop its status bar AND its prefix.
+  # With a live prefix + status off, C-b c created windows no chrome
+  # anywhere could show (live report, 2026-07-22); prefix None makes C-b
+  # pass through to the agent, while wheel scrollback (mouse copy-mode)
+  # is untouched. Chained after new-session so it also applies when -A
+  # reattaches a session created the other way; the non-nested branch
+  # symmetrically resets both (-u = back to server defaults), so a
+  # session born nested is fully drivable from a plain terminal.
   if [ "${VIBE_NESTED:-0}" = "1" ]; then
     # Explicit -t: without it the chained command binds to whatever session
     # tmux considers current, not necessarily the one just created. Plain
     # name, no "=" — set-option's -t is a pane target, which rejects the
     # exact-match prefix (verified on 3.7b); exact names win over prefix
     # matches, and these session names are harness-controlled anyway.
-    exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; set-option -t "$session" status off
+    exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; \
+      set-option -t "$session" status off \; \
+      set-option -t "$session" prefix None
   fi
-  exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")"
+  exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; \
+    set-option -t "$session" -u status \; \
+    set-option -t "$session" -u prefix
 fi
 exec "${cmd[@]}"

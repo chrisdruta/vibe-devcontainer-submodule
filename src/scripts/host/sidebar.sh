@@ -21,6 +21,11 @@
 #                      cover the rest as they're visited)
 #   ensure WINDOW_ID   idempotent: sidebar present in WINDOW iff flag on
 #   render [--once]    the draw loop inside the pane (--once: one frame)
+#   click PANE ROW [CLIENT]  switch CLIENT to the project drawn on ROW —
+#                      the conf's MouseDown1Pane binding routes sidebar
+#                      clicks here; ROW resolves via @vibe_sidebar_map,
+#                      which render publishes each frame, so there is no
+#                      second copy of the layout arithmetic to drift
 #
 # Refresh is a 2s poll INSIDE each sidebar pane (the branch line has no
 # tmux event to hook anyway); the status line stays event-driven. If the
@@ -91,6 +96,25 @@ ensure)
   ensure_in "$win"
   exit 0
   ;;
+click)
+  pane="${2:-}"
+  y="${3:-}"
+  client="${4:-}"
+  { [ -n "$pane" ] && [ -n "$y" ]; } || exit 0
+  sid=""
+  for entry in $(tmux show-options -pqv -t "$pane" @vibe_sidebar_map 2>/dev/null); do
+    case "$entry" in
+      "$y":*) sid="${entry#*:}" && break ;;
+    esac
+  done
+  [ -n "$sid" ] || exit 0 # gutter/blank row — not a project
+  if [ -n "$client" ]; then
+    tmux switch-client -c "$client" -t "$sid" 2>/dev/null
+  else
+    tmux switch-client -t "$sid" 2>/dev/null
+  fi
+  exit 0
+  ;;
 render) ;;
 *) exit 0 ;;
 esac
@@ -144,9 +168,13 @@ frame() {
   max=$((width - 3))
   [ "$max" -lt 8 ] && max=8
 
-  buf="$(printf '\033[H')"
-  buf="$buf
-$eol"
+  buf="$(printf '\033[H')$eol"
+  # Click map: pane row -> session id, published as @vibe_sidebar_map for
+  # the click mode above. A session claims its name row, branch row, AND
+  # the blank row under it — click slop, and insurance against an
+  # off-by-one in mouse_y indexing across tmux versions.
+  row=0
+  map=""
   while IFS="$tab" read -r sid name path; do
     [ -n "$sid" ] || continue
     # Dots: window order, same semantics as the tabs — attention renders
@@ -172,20 +200,29 @@ EOF2
     [ "${#shown}" -gt "$max" ] && shown="$(printf '%.*s' $((max - 1)) "$shown")…"
     buf="$buf
 ${mark}${reset} ${bold}${name_c}${shown}${reset}${dots}${reset}${eol}"
+    row=$((row + 1)); map="$map $row:$sid"
     br="$(branch_of "$path")"
     if [ -n "$br" ]; then
       [ "${#br}" -gt $((max - 2)) ] && br="$(printf '%.*s' $((max - 3)) "$br")…"
       buf="$buf
    ${c_dim}⎇ ${br}${reset}${eol}"
+      row=$((row + 1)); map="$map $row:$sid"
     fi
     buf="$buf
 $eol"
+    row=$((row + 1)); map="$map $row:$sid"
   done <<EOF
 $(tmux list-sessions -F "#{session_id}$tab#{session_name}$tab#{session_path}" 2>/dev/null | sort -t "$tab" -k2)
 EOF
   printf '%s\033[J' "$buf"
+  map="${map# }"
+  if [ "$map" != "$last_map" ]; then
+    tmux set-option -p -t "${TMUX_PANE:-}" @vibe_sidebar_map "$map" 2>/dev/null
+    last_map="$map"
+  fi
 }
 
+last_map=""
 printf '\033[?25l'
 trap 'printf "\033[?25h"' EXIT
 frame

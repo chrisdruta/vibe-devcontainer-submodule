@@ -159,6 +159,7 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
 | `prefix o` | switch project — session tree of everything on the vibe socket |
+| `prefix b` | toggle the project sidebar everywhere (on by default) |
 | `prefix r` | respawn a dead agent pane (it stays visible on exit) |
 | `prefix d` | detach — everything keeps running; `vibe tui` reattaches |
 | `prefix Q` | quit the UI session (asks first; agents keep running) |
@@ -166,9 +167,19 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 | `Alt+←→↑↓` / `Alt+1..9` | move between panes / windows, no prefix |
 
 Tabs are clickable (mouse is on), and the `+` at the right end of the status
-bar opens a new host window. The config lives at `src/config/tmux-tui.conf`
+bar opens a new host window. The left sidebar lists every project on the
+socket — state dots, bold name, git branch — and clicking a project
+switches to it; the `windows:` label in the status bar marks the tab list
+of the current project. The config lives at `src/config/tmux-tui.conf`
 on its own socket — your personal `~/.tmux.conf` and default tmux server are
 never touched.
+
+Inside the agent pane a second, container-side tmux carries the session —
+that's what survives detach. It is an engine, not a UI: under the tui it
+has no prefix at all (`C-b` passes straight through to the agent, and can't
+create windows no chrome would show). Run `vibe agent` from a plain
+terminal instead and that inner tmux becomes the UI again, status bar and
+`C-b` restored.
 
 **Leaving the UI:** closing the terminal window is just a detach (same as
 `prefix d`) — the layout and every pane keep running, and the next
