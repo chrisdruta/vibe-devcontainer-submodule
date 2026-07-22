@@ -22,6 +22,9 @@ set -euo pipefail
 sh_die() { printf 'vibe: %s\n' "$1" >&2; exit 1; }
 
 sh_sanitize_env() {
+  # Reset PATH FIRST — before running any external command (env/sed) below — so
+  # a workspace dir earlier in the inherited PATH can't shadow them (sol H4/M10).
+  PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${PATH:+:$PATH}"; export PATH
   unset BASH_ENV ENV SHELLOPTS GLOBIGNORE VIBE_TUI_TMUX 2>/dev/null || true
   local v
   for v in $(env 2>/dev/null | sed -n 's/^\(GIT_[A-Za-z0-9_]*\)=.*/\1/p'); do
@@ -29,9 +32,6 @@ sh_sanitize_env() {
   done
   GIT_CONFIG_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0
   export GIT_CONFIG_NOSYSTEM GIT_TERMINAL_PROMPT
-  # System dirs FIRST (see store.sh vibe_sanitize_env, sol M10) — a workspace
-  # dir earlier in PATH must not supply git/sed/stat for the store lookup.
-  PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${PATH:+:$PATH}"; export PATH
 }
 
 sh_store_home() {

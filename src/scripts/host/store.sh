@@ -595,16 +595,18 @@ vibe_compose_exec() {
   if docker compose version >/dev/null 2>&1; then compose_bin="docker compose"
   elif command -v docker-compose >/dev/null 2>&1; then compose_bin="docker-compose"
   else printf 'vibe: docker compose not found\n' >&2; return 1; fi
-  # Docker-client vars, passed through only when set (bash 3.2: eval-indirect;
-  # these values are not expected to contain spaces).
-  local docker_env="" dv val
+  # Docker-client vars, passed through only when set. An ARRAY (not a string) so
+  # a value containing spaces can't inject an extra NAME=value into env -i or
+  # break a spaced DOCKER_CONFIG/cert path (sol M6). bash-3.2: eval-indirect.
+  local dv val
+  local denv=()
   for dv in DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG DOCKER_TLS_VERIFY DOCKER_CERT_PATH; do
     eval "val=\${$dv:-}"
-    [ -n "$val" ] && docker_env="$docker_env $dv=$val"
+    [ -n "$val" ] && denv+=("$dv=$val")
   done
   # shellcheck disable=SC2086
   env -i \
-    $docker_env \
+    ${denv[@]+"${denv[@]}"} \
     PATH="$PATH" HOME="$HOME" \
     VIBE_PROJECT_NAME="$pname" VIBE_WORKSPACE_BASENAME="$ws" \
     VIBE_REPO_ROOT="$pdir" VIBE_USER_UID="$(id -u)" \
@@ -715,15 +717,15 @@ vibe_enforce_compose() {
   printf '%s\n' "$model" | grep -Eiq 'seccomp[=:][[:space:]]*unconfined|apparmor[=:][[:space:]]*unconfined|label[=:][[:space:]]*disable' \
     && violations="$violations security_opt-unconfined"
 
-  # ── surfaces that bypass the bind gate or read live host inputs — refused ─
+  # ── surfaces that survive normalization and bypass the bind gate — refused ─
   # A `local` driver volume with `o: bind`/`device:` is a host bind wearing a
   # named-volume costume; configs/secrets `file:` read arbitrary host files;
-  # include/extends/env_file are read live at up-time (not frozen). None appear
-  # in the seeded configs — a project that needs them opts into --unsafe.
+  # `provider` runs a host binary. (env_file/include/extends are normalized
+  # AWAY by `compose config`, so they are caught on the SOURCE before rendering
+  # — vibe_scan_source_compose — not here.) These survive and are a second layer.
   printf '%s\n' "$model" | grep -Eq '^[[:space:]]*driver_opts:' && violations="$violations volume-driver_opts"
   printf '%s\n' "$model" | grep -Eq '^(configs|secrets):[[:space:]]*$' && violations="$violations configs-or-secrets"
-  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*(include|extends):' && violations="$violations include-or-extends"
-  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*env_file:' && violations="$violations env_file"
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*provider:' && violations="$violations provider"
 
   # ── (b) guarantees REQUIRED on the dev service — DIRECT children only ─────
   if [ -z "$dev" ]; then
@@ -807,6 +809,44 @@ $set_key=$set_val"
   vibe_record_write "$file" $(printf '%s\n' "$pairs" | grep .)
 }
 
+# Scan the SOURCE project compose file ($1) for features that `docker compose
+# config` would normalize away (so a rendered-model grep can't see them) AND
+# that read host files or run host binaries at render/build time — the render
+# itself would already have touched them. These must be caught BEFORE any render.
+# Prints violations; returns 2 if any. Fail-closed: presence of the key string
+# is enough (a project that legitimately needs one uses --unsafe). The seeded
+# configs use none of these. Docker's own compose trust-model documents these as
+# host-file-read / host-exec surfaces.
+vibe_scan_source_compose() {
+  local f="$1" v=""
+  [ -f "$f" ] || return 0
+  local pat
+  for pat in env_file include extends provider volumes_from label_file \
+             additional_contexts driver_opts; do
+    grep -Eq "^[[:space:]]*${pat}:" "$f" && v="$v $pat"
+  done
+  # build.ssh (host SSH agent into a build) — `ssh:` under build.
+  grep -Eq '^[[:space:]]*ssh:' "$f" && v="$v build-ssh"
+  # top-level or service configs:/secrets: (host file reads / secret surfaces).
+  grep -Eq '^(configs|secrets):[[:space:]]*$|^[[:space:]]*(configs|secrets):[[:space:]]*(\[|$)' "$f" && v="$v configs-secrets"
+  # Build contexts other than the frozen ./.vibe (the only one we snapshot).
+  local ctx
+  while IFS= read -r ctx; do
+    ctx="$(printf '%s' "$ctx" | sed -E 's/^[[:space:]]*context:[[:space:]]*//; s/[\"'"'"']//g; s#[[:space:]]*$##')"
+    case "$ctx" in
+      "" | ./.vibe | ./.vibe/ | .vibe | .vibe/) ;;
+      *) v="$v build-context:$ctx" ;;
+    esac
+  done <<EOF
+$(grep -E '^[[:space:]]*context:' "$f" 2>/dev/null)
+EOF
+  if [ -n "$v" ]; then
+    printf 'SOURCE COMPOSE VIOLATIONS:%s\n' "$v" >&2
+    return 2
+  fi
+  return 0
+}
+
 # The full gate. Snapshots the compose control inputs into a UNIQUE per-run dir
 # (no cross-process clobber), renders under a scrubbed env, structurally
 # enforces the boundary, and prompts on drift from the recorded hash. Exports
@@ -824,6 +864,22 @@ vibe_compose_gate() {
   local snap; snap="$(vibe_mktemp_dir "$home/state/snapshots")" || return 1
   vibe_snapshot_compose_inputs "$root" "$snap" || { rm -rf "$snap"; return 1; }
 
+  local unsafe_banner=0
+
+  # SOURCE scan FIRST — before any render, because `compose config` both hides
+  # these keys (normalization) and READS their referenced host files. Scan the
+  # real source file as data.
+  local src_rc=0
+  vibe_scan_source_compose "$root/.vibe/compose.yaml" || src_rc=$?
+  if [ "$src_rc" = "2" ]; then
+    if [ "$unsafe" = "--unsafe" ]; then unsafe_banner=1; else
+      printf '\nRefusing to run: the project compose file uses a feature that reads host\n' >&2
+      printf 'files or runs host binaries and cannot be safely gated (see above). Re-run\n' >&2
+      printf 'with --unsafe to proceed (which disables the boundary for that command).\n' >&2
+      rm -rf "$snap"; return 1
+    fi
+  fi
+
   local rendered="$snap/rendered.yaml"
   if ! vibe_render_compose "$base" "$snap/.vibe/compose.yaml" "$root" "$pname" "$ws" "$hdir" >"$rendered"; then
     printf 'vibe: could not render the merged compose config for review\n' >&2
@@ -835,26 +891,25 @@ vibe_compose_gate() {
   local enforce_rc=0
   vibe_enforce_compose "$rendered" "$ws" "$root_canon" "$home/versions" "$hdir" || enforce_rc=$?
   if [ "$enforce_rc" = "2" ]; then
-    if [ "$unsafe" = "--unsafe" ]; then
-      printf '\n*** --unsafe: the container boundary is DISABLED for this command. ***\n' >&2
-      printf '*** The rendered compose config violates the hardening invariants above. ***\n\n' >&2
-    else
+    if [ "$unsafe" = "--unsafe" ]; then unsafe_banner=1; else
       printf '\nRefusing to run: the project compose config would weaken the container\n' >&2
       printf 'boundary (see violations above). If this is deliberate, re-run with --unsafe\n' >&2
       printf '(which loudly disables the boundary for that one command).\n' >&2
       rm -rf "$snap"; return 1
     fi
   fi
+  if [ "$unsafe_banner" = 1 ]; then
+    printf '\n*** --unsafe: the container boundary is DISABLED for this command. ***\n\n' >&2
+  fi
 
-  # Drift check: hash covers the rendered model AND the raw control inputs
-  # (compose.yaml, Dockerfile, .dockerignore, config.env — present/absent) so a
-  # Dockerfile edit is drift too. The baseline hash lives IN the record; a
-  # per-digest prev-render (stable, outside the unique dir) backs the diff.
-  local cur_hash rec_hash prev
-  local f
-  cur_hash="$( { vibe_sha256_file "$rendered"; cat "$snap/.inputs" 2>/dev/null; \
+  # Drift check: hash the STABLE SOURCE control inputs (raw .vibe control-file
+  # CONTENT + present/absent ledger) — NOT the rendered model, whose per-run
+  # absolute snapshot path would otherwise change the hash every invocation and
+  # re-prompt endlessly (sol). A Dockerfile/compose edit still changes this hash.
+  local cur_hash rec_hash prev f
+  cur_hash="$( { cat "$snap/.inputs" 2>/dev/null; \
                  for f in compose.yaml Dockerfile .dockerignore config.env; do \
-                   [ -f "$snap/.vibe/$f" ] && vibe_sha256_file "$snap/.vibe/$f"; \
+                   [ -f "$root/.vibe/$f" ] && vibe_sha256_file "$root/.vibe/$f"; \
                  done; } | vibe_sha256_stdin )"
   rec_hash="$(vibe_record_get "$record" compose_snapshot_hash 2>/dev/null || true)"
   prev="$home/state/snapshots/$digest.prev.yaml"

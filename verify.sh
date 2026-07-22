@@ -298,6 +298,23 @@ services:
 YAML
 vibe_enforce_compose "$enf_dir/sidecar.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1 \
   || { echo "FAIL: enforcement rejected a legit non-vscode sidecar" >&2; exit 1; }
+# SOURCE scan: features that `compose config` normalizes away / reads host files
+# at render time must be caught on the SOURCE, before any render. The seeded
+# example configs (incl. a ./.vibe extension context) must pass.
+for src_ok in "$repo_root"/examples/*/compose.yaml; do
+  vibe_scan_source_compose "$src_ok" >/dev/null 2>&1 \
+    || { echo "FAIL: source scan rejected a seeded config: $src_ok" >&2; exit 1; }
+done
+printf 'services:\n  dev:\n    image: x\n    build:\n      context: ./.vibe\n' >"$enf_dir/ctx.yaml"
+vibe_scan_source_compose "$enf_dir/ctx.yaml" >/dev/null 2>&1 \
+  || { echo "FAIL: source scan rejected a ./.vibe extension context" >&2; exit 1; }
+for bad in "    env_file: [./x.env]" "    provider:\n      type: /bin/x" \
+           "    volumes_from: [other]" "    build:\n      context: /host"; do
+  printf 'services:\n  dev:\n%b\n' "$bad" >"$enf_dir/src_bad.yaml"
+  if vibe_scan_source_compose "$enf_dir/src_bad.yaml" >/dev/null 2>&1; then
+    echo "FAIL: source scan accepted a host-read/exec feature ($bad)" >&2; exit 1
+  fi
+done
 # First contact must FAIL CLOSED without a tty (piped stdin here).
 fc_app="$store_tmp/fcapp"; mkdir -p "$fc_app/.vibe"; git -C "$fc_app" init -q
 : >"$fc_app/.vibe/compose.yaml"

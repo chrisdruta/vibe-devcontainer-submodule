@@ -78,14 +78,17 @@ How it works:
 - **Same-basename checkouts still share the agent-state volume**
   (`agent-state-<basename>`) despite distinct host trust records — documented
   ABI, not isolation.
-- **Image-extension build context.** The default image builds from the trusted
-  store `src`, but a project image extension (`.vibe/Dockerfile`, opt-in) builds
-  from the live `./.vibe` context. The `Dockerfile` itself is hash-gated (a
-  changed `COPY` target is drift you review), but its context files are read
-  live at build time — a narrow TOCTOU on extension projects only. Freezing the
-  full referenced-input closure (build context, `env_file`, `include`) into the
-  host snapshot is the top post-1.0 hardening; until then, do not point an
-  image-extension project at untrusted code.
+- **Compose is not a hard boundary.** The gate scans the project compose
+  *source* for host-file-read / host-exec features (`env_file`, `include`,
+  `extends`, `provider`, `volumes_from`, `label_file`, `configs`/`secrets`,
+  `driver_opts`, `additional_contexts`, `build.ssh`) and refuses them, and
+  structurally enforces the rendered `dev` service and its mounts; the default
+  image-extension context (`./.vibe`) is snapshotted and frozen. But Docker's
+  own compose trust-model documents compose as able to read host files and run
+  host binaries through an evolving set of features — a maliciously *authored*
+  compose file is caught on a best-effort basis, not proven contained. For
+  genuinely untrusted project code, use a disposable clone / the planned
+  `--jailed` profile rather than relying on the compose gate.
 - SHA-1 collision resistance of the pin is mitigated (sha1dc + fsck), not solved.
 
 ## What the default container enforces
