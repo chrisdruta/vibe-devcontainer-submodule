@@ -123,8 +123,9 @@ and rebuild semantics: [extending.md](extending.md); worked examples:
 project compose services, not image content.
 
 Interpolation variables exported by the launcher for compose files:
-`VIBE_PROJECT_NAME` (sanitized `vibe-<folder>`), `VIBE_WORKSPACE_BASENAME`,
-`VIBE_REPO_ROOT`, `VIBE_USER_UID`.
+`VIBE_PROJECT_NAME` (the per-checkout identity `vibe-<basename>-<suffix>`
+from the host trust record — see [agent-state.md](agent-state.md)),
+`VIBE_WORKSPACE_BASENAME`, `VIBE_REPO_ROOT`, `VIBE_USER_UID`.
 
 ## Claude Code project settings
 
@@ -146,9 +147,9 @@ import it from the project's root `CLAUDE.md`/`AGENTS.md` with a
 Nothing auto-sources `.env`; `.bashrc` is never modified. Load explicitly:
 
 ```bash
-./vibe agent            # loads DEV_ENV_FILE, then runs DEV_AGENT_CMD
-./vibe agent --cold     # same, but without repo instruction files (see usage.md)
-./vibe run codex        # same, for any command
+vibe agent            # loads DEV_ENV_FILE, then runs DEV_AGENT_CMD
+vibe agent --cold     # same, but without repo instruction files (see usage.md)
+vibe run codex        # same, for any command
 .vibe/harness/src/scripts/env-run.sh some-command   # inside the container
 ```
 

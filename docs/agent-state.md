@@ -51,13 +51,14 @@ self-update therefore does not stick — update Grok by rebuilding the image.
 
 Everything **except this volume** — containers, sidecars, network, image
 tags — is namespaced by a per-checkout project identity
-(`vibe-<basename>-<8-hex suffix>`, persisted in `.vibe/.project-id`, never
-committed), so two checkouts named `app` in different places run fully
-independent stacks and `vibe down` in one can never touch the other. A
-checkout that already ran under the old unsuffixed name keeps it (adopted
-automatically on the next `vibe` command). Deleting `.vibe/.project-id`
-regenerates the same identity for an unmoved checkout; moving a checkout
-keeps its identity because the file moves with it.
+(`vibe-<basename>-<8-hex suffix>`), so two checkouts named `app` in
+different places run fully independent stacks and `vibe down` in one can
+never touch the other. The identity lives in the HOST trust record
+(`~/.vibe/state/projects/<digest>`, keyed by the canonical checkout path)
+and is injected into the container as `VIBE_PROJECT_NAME` — never a
+workspace file, which a container could forge (see
+[security.md](security.md)). A checkout that already ran under the old
+unsuffixed name keeps it (adoption is probed via compose's own labels).
 
 The volume name, by contrast, uses only the workspace folder **basename**
 (a compatibility ABI — changing it would log every consumer out):

@@ -1,10 +1,13 @@
 # Daily usage
 
-All commands run via the seeded root symlink (or `.vibe/vibe`, the same
-thing) — or as plain `vibe` with the [global install](#global-install) below:
+All host commands run as plain `vibe` — the shim `install.sh --self` puts at
+`~/.vibe/bin/vibe` ([installation.md](installation.md)); it resolves the
+project you are standing in to its trusted harness version
+([security.md](security.md)). Inside the container, `./vibe` in the
+workspace root works too (the harness is bind-mounted read-only there):
 
 ```bash
-./vibe COMMAND [ARGS...]
+vibe COMMAND [ARGS...]
 ```
 
 | Command     | Does                                                                  |
@@ -17,16 +20,20 @@ thing) — or as plain `vibe` with the [global install](#global-install) below:
 | `down`      | Stop & remove **all** of this project's service containers (dev + sidecars) plus the project network; named volumes (agent state, sidecar data) are kept — `vibe up` recreates the rest |
 | `shell`     | Open a Bash shell in the container                                     |
 | `attach [SESSION]` | Attach (or create) a tmux session in the container — the door into the services session `vibe-svc` populates from `project/post-start.sh` ([services.md](services.md)). Name: argument > `DEV_ATTACH_TMUX_SESSION` > `services` |
-| `agent [--cold] [-a CMD]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation |
+| `agent [--cold] [-a CMD] [-s NAME]` | Run the configured default agent (`DEV_AGENT_CMD`) with explicit `.env` loading; with `DEV_AGENT_TMUX=1`, inside a persistent tmux session. `--cold`: fresh-perspective session without repo instruction files. `-a`/`--agent`: run `CMD` instead of `DEV_AGENT_CMD` for this invocation. `-s`/`--session NAME`: a parallel instance in its own session `agent-NAME` (without it, a second `vibe agent` reattaches the running one) |
 | `run CMD`   | Run any command with explicit `.env` loading (e.g. `vibe run codex`)    |
 | `exec CMD`  | Run any command **without** `.env` loading                             |
+| `ps`        | Agents & services at a glance: state, liveness, age                    |
 | `doctor`    | Check the environment; prints OK/MISS per requirement                  |
 | `bootstrap` | Rerun create-time dependency setup (idempotent)                        |
 | `update [TAG]` | Move the harness pin (fetch, changelog delta, checkout, stage)      |
 | `clip [DIR]` | Save the host clipboard image into container `/tmp`, or `DIR` in the workspace (image-paste workaround) |
 | `show [PATH]` | Preview an image in the terminal via sixel (default: newest `vibe clip` capture) |
 | `review [DIR]` | Browse/review images with yazi (verdict keys, badges — below)       |
-| `tui`       | The workspace as a riced host-side tmux — agent pane, host shell pane, tabs, palette ([below](#the-tui-vibe-tui)) |
+| `tui`       | The workspace as a riced host-side tmux — agent pane, host dock, tabs, sidebar, palette ([below](#the-tui-vibe-tui)) |
+
+(The host store verbs — `vibe provision`, `vibe self-update`, `vibe dev` —
+belong to the trust flow and live in [security.md](security.md).)
 
 The launcher drives docker directly: `docker compose` for the container
 lifecycle (the harness base compose file with the project's
@@ -36,17 +43,16 @@ and no Node dependency; git and Docker are the whole host requirement.
 
 ## Global install
 
-The launcher targets the nearest ancestor of the current directory with a
-`.vibe/compose.yaml`, so one symlink on the host `PATH` serves every harness
-project:
+One shim serves every harness project: it targets the nearest ancestor of
+the current directory with a `.vibe/compose.yaml`, resolves that project's
+trusted harness version, and execs it. Installed once by
+`install.sh --self` (any project's `.vibe/harness/install.sh --self`
+works); the first `vibe` command on a new project asks you to trust its
+pin ([security.md](security.md)).
 
 ```bash
-ln -s ~/dev/any-project/.vibe/harness/vibe ~/.local/bin/vibe
 cd ~/dev/other-project && vibe agent    # targets other-project
 ```
-
-Only when run from outside any project does it fall back to the project the
-script itself lives in.
 
 Container commands (`agent`, `shell`, `run`, `exec`, `doctor`, `bootstrap`,
 `clip`, `show`, `review`) start the container automatically when it isn't
@@ -67,14 +73,14 @@ With `DEV_AGENT_TMUX=1` in `config.env` (the seeded default for new installs),
 
 - **Detach** with `Ctrl-b d` — the agent keeps running; closing the terminal or
   losing the connection also leaves it running.
-- **Reattach** by rerunning `./vibe agent` (arguments are ignored
+- **Reattach** by rerunning `vibe agent` (arguments are ignored
   when an existing session is attached; the session ends when the agent exits).
 - **One-off plain run**: `vibe run claude`, or set `DEV_AGENT_TMUX=0`.
 
 Run several agents side by side in tmux (installed in the image):
 
 ```bash
-./vibe shell
+vibe shell
 tmux
 # pane 1: claude    pane 2: codex    pane 3: grok
 ```
@@ -100,9 +106,9 @@ Remaining arguments pass through (`vibe agent --cold --continue`), and it
 composes with the per-invocation agent selector:
 
 ```bash
-./vibe agent -a codex          # Codex session (DEV_AGENT_CMD untouched)
-./vibe agent --cold -a codex   # Codex without AGENTS.md
-./vibe agent -a "codex --model gpt-5"   # override may carry arguments
+vibe agent -a codex          # Codex session (DEV_AGENT_CMD untouched)
+vibe agent --cold -a codex   # Codex without AGENTS.md
+vibe agent -a "codex --model gpt-5"   # override may carry arguments
 ```
 
 With `DEV_AGENT_TMUX=1` each variant uses its own tmux session — `agent`,
@@ -113,7 +119,7 @@ wrong session and can happily run side by side.
 
 The front door: a **host-side tmux** owns the layout, tabs, and theme, and
 the terminal is just a fullscreen window. Container tmux sessions keep
-persistence underneath — the agent pane is `./vibe agent` attaching to
+persistence underneath — the agent pane is `vibe agent` attaching to
 session `agent`, so closing the terminal (or the laptop lid) never loses
 work. One surface holds agent panes AND native host shells (host-side git,
 `vibe clip`) and works in any terminal on any OS. It scales to several
@@ -124,12 +130,12 @@ its hooks push out and never drives, schedules, or orchestrates agents
 (see [positioning.md](positioning.md)).
 
 ```bash
-./vibe tui    # session per project on the dedicated "vibe" tmux socket:
-              # agent pane (70%) | host shell pane, tabs across the top
+vibe tui      # session per project on the dedicated "vibe" tmux socket:
+              # agent pane over a collapsible host dock, tabs across the top
 ```
 
-(The per-pane commands compose manually too — `./vibe agent`,
-`./vibe shell`, `./vibe review` each attach to their own container session
+(The per-pane commands compose manually too — `vibe agent`,
+`vibe shell`, `vibe review` each attach to their own container session
 from any terminal split. That was the retired `vibe open` workflow; the
 commands remain first-class, only the wt.exe layout automation is gone.
 `vibe review` in a plain terminal pane outside the TUI remains the
@@ -155,7 +161,7 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 
 | Chord | Effect |
 | --- | --- |
-| `prefix Space` | palette: agent/codex/shell/services windows, switch project, git popup, doctor, detach/quit |
+| `prefix Space` | palette: agent/codex/shell/services windows, new named agent (`vibe agent -s`), review diff (revdiff), agents at a glance (`vibe ps`), switch project, sidebar/dock toggles, git popup, doctor, detach/quit |
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
 | `prefix o` | switch project — session tree of everything on the vibe socket |
@@ -172,7 +178,7 @@ bar opens a new host window. The left sidebar lists every project on the
 socket — state dots, bold name, git branch — and clicking a project
 switches to it; the `windows:` label in the status bar marks the tab list
 of the current project. To add another project to the sidebar without
-opening a new terminal, run `./vibe tui --detach` in that project's
+opening a new terminal, run `vibe tui --detach` in that project's
 checkout (any shell works, including a host pane of the tui) — the session
 is built on the shared server but nothing attaches to it. The config lives at `src/config/tmux-tui.conf`
 on its own socket — your personal `~/.tmux.conf` and default tmux server are
@@ -187,12 +193,12 @@ terminal instead and that inner tmux becomes the UI again, status bar and
 
 **Leaving the UI:** closing the terminal window is just a detach (same as
 `prefix d`) — the layout and every pane keep running, and the next
-`./vibe tui` reattaches, respawning the agent pane if it died in the
+`vibe tui` reattaches, respawning the agent pane if it died in the
 meantime. `prefix Q` closes the UI session for real; container agent
 sessions survive either way — the UI never owns your work. One upgrade
 gotcha: a *running* UI server pins the tmux binary it was started with, so
 after installing a newer tmux run `tmux -L vibe kill-server` once (`vibe
-ui` warns about the skew and prints exactly that).
+tui` warns about the skew and prints exactly that).
 
 Windows Terminal bindings worth adding for pane-heavy layouts (all unbound
 by default; Settings → "Open JSON file"). Recent WT splits these across two
@@ -231,17 +237,12 @@ The full working set with those in place (rest are stock WT defaults):
 | `Alt+arrows` | Focus pane by direction |
 | `Alt+Shift+arrows` | Resize the focused pane |
 | `Ctrl+Shift+W` | Close pane (tab when last) — safe: sessions live in tmux |
-| `Alt+Shift+D` | New split; run any `./vibe ...` in it |
+| `Alt+Shift+D` | New split; run any `vibe ...` in it |
 | `Ctrl+Alt+1..9` | Jump straight to tab N |
 | `Ctrl+Shift+P` | Command palette (every action, bound or not) |
 
 Inside an agent pane, tmux still answers `Ctrl+B D` — detach, agent keeps
 running (same effect as closing the pane).
-
-Anywhere without `wt.exe` (macOS, WSL without Windows Terminal) it prints the
-per-pane commands instead — that fallback is the intended degraded mode, not
-an error. Layouts are hardcoded for now; config-driven layouts are on the
-backlog (BACKLOG.md).
 
 ## Pasting images to an agent
 
@@ -251,7 +252,7 @@ server to reach it (the terminal only ever sends text down the pty). Instead,
 with an image on the host clipboard, run on the host:
 
 ```bash
-./vibe clip
+vibe clip
 # In the container: /tmp/clip-20260715-093042.png
 # (path copied to clipboard)
 ```
@@ -266,7 +267,7 @@ To keep captures instead, pass a workspace-relative directory — the image is
 written straight through the bind mount (no running container required):
 
 ```bash
-./vibe clip .captures
+vibe clip .captures
 # Saved: .captures/clip-20260715-093042.png
 ```
 
@@ -284,9 +285,9 @@ image, pinned by checksum) plus a one-shot renderer:
   search, and preview images with yazi's native rendering (sixel on Windows
   Terminal ≥ 1.22; protocol auto-detected).
 - Inside the agent tmux session, **prefix + `i`** jumps to (or creates) the
-  **`preview` window** — a yazi instance in a dedicated window (tmux 3.5a
-  drops sixel on redraws of inactive panes, so review gets a full window, not
-  a split).
+  **`preview` window** — a yazi instance in a dedicated window (images in a
+  split beside a redrawing agent TUI are still unreliable, so review gets a
+  full window; review-as-split is a recorded backlog item).
 - `vibe show [PATH]` renders one image in the invoking terminal and returns —
   the no-TUI path; with no argument, the newest clip or
   `VIBE_PREVIEW_DIR` image. `vibe show --diag PATH` explains a failing
@@ -349,6 +350,17 @@ one-shot use: small `png`/`jpeg`/`gif`/`bmp` render through `img2sixel` with
 integer nearest-neighbor upscaling (actual pixels, no blending),
 `webp`/`avif`/`svg` via `chafa`, and the real format is always sniffed from
 file content, never the extension.
+
+### Reviewing diffs (revdiff)
+
+For "review what the agent changed",
+[revdiff](https://github.com/umputun/revdiff) is baked into the image
+(pinned, checksummed) as a read-only diff-review TUI: a file tree plus diff
+pane, `v` toggles between the final file text and its diff, and annotations
+made while reviewing print to stdout on quit. Reach it from the tui palette
+(`r` — runs with `--untracked` so brand-new agent files show) or
+`vibe exec revdiff` from any shell. It is deliberately not a top-level
+`vibe` command while it's a trial surface.
 
 ## Troubleshooting
 

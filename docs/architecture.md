@@ -37,7 +37,6 @@ Containers are discovered by the `vibe.project=<repo-root>` label.
 
 ```text
 my-project/
-├── vibe                # PROJECT-owned: root symlink → .vibe/vibe
 └── .vibe/
     ├── compose.yaml    # PROJECT-owned: image args, mounts, ports (merged over the base)
     ├── config.env      # PROJECT-owned: behavior toggles
@@ -45,7 +44,7 @@ my-project/
     ├── project/        # PROJECT-owned: lifecycle hooks
     ├── yazi/           # PROJECT-owned: image-review preferences
     └── harness/        # SHARED: this repo, pinned as a git submodule
-        ├── vibe            # launcher (repo-agnostic; entry point at the root)
+        ├── vibe            # launcher (repo-agnostic; the host runs it from the trust store, the container from this mount)
         ├── install.sh      # consumer installation
         ├── src/
         │   ├── Dockerfile      # image recipe (base + optional tool args)

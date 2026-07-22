@@ -5,412 +5,245 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
-- **`vibe tui` internals pass (pre-security-review): per-event `./vibe`
-  execution eliminated, one theme source, cheaper sidebar.** The conf's
-  hooks/bindings now resolve harness scripts through a `@vibe_harness_dir`
-  option tui.sh stamps once at launch (first-owner, like `VIBE_TUI_CONF`)
-  instead of running `$(./vibe __harness-dir)` — a subprocess executing the
-  session-cwd's `./vibe` — on every title change/resize/window event.
-  Palette + state→glyph map moved to `src/config/theme.sh`, the single
-  source for state-render.sh, sidebar.sh, and `vibe ps` (the conf's `@thm`
-  block is its documented lockstep twin); the pane-died corpse mark now
-  flows through state-render.sh too. Sidebar refresh is serial-gated: an
-  idle tick is one tmux round trip (was ~2+S per sidebar), dots/new
-  sessions still show in ≤2s, branch-line changes may take up to 10s.
-  Pick it all up with `vibe tui --fresh` after updating; the reload
-  scrubbers for the long-retired status-line-2 strip are gone, so a live
-  pre-sidebar server should also relaunch rather than prefix+R.
-- **`vibe tui` multi-project quit semantics fixed (two live reports from
-  the first two-project session).** Quitting a project's UI while
-  another project is on the socket used to teleport that terminal into
-  the other project (`detach-on-destroy off` — unobservable pre-spaces,
-  wrong ever since): now the client simply exits (`detach-on-destroy
-  on`); last-session behavior is unchanged (server exits). And the
-  strip's auto-hide/show transition now issues a FULL client refresh
-  instead of a status-only one — the status-line-count flip resizes
-  every pane, and the partial refresh left the resized region glitched
-  on nested TUI clients until a manual terminal resize.
-- **New: "switch project" in the `vibe tui` palette and on `prefix o`.**
-  Both open tmux's session tree (`choose-tree -Zs`) — the project
-  switcher for multi-project use, live-sessions-only by design (no
-  registry: you can switch to any project whose tui has been started).
-  The direct chord overrides tmux's default `prefix o` (rotate-pane —
-  Alt+arrows cover pane movement, and the default's only observed
-  effect was masquerading as a broken picker during the first live
-  two-project session). Docs also catch up on the two remaining
-  `tmux-ui.conf` → `tmux-tui.conf` rename stragglers in usage.md.
-- **New: cross-project agents strip in `vibe tui` (host-side, no
-  rebuild).** While a second project session exists on the `vibe` socket,
-  a second status line lists every project with its agents' state dots —
-  the same glyph vocabulary as the tabs (`●` working/idle by color, `✗`
-  exited, `◌` frontend-dead), with attention rendered as a coral dot
-  (on tabs the attention dot deliberately blends into the flashing tab
-  background; the strip has no flashing background). Render-only, fully
-  event-driven (agent hook events redraw it across sessions; session
-  create/kill is nudged by `session-created`/`session-closed` hooks —
-  still no polling anywhere), current project bold, names truncated at
-  12, and it auto-hides when only one project is running, so the
-  solo-project UI is unchanged. The conf no longer sets `status on`
-  explicitly (the hooks own the line count; an explicit set would have
-  collapsed the strip on every prefix+R reload). Load with prefix+R or
-  `vibe tui --fresh`.
-- **`vibe tui` conf ownership is now first-owner-authoritative (host-side,
-  no rebuild).** The UI server is styled by whichever project starts it
-  (tmux applies `-f` at server start only), but every later launch used to
-  overwrite the server-global `VIBE_TUI_CONF`, so prefix+R could reload
-  project A's pinned conf over project B's sessions. The launcher now
-  adopts the variable only when unset (or when the owner's conf file has
-  vanished — self-heal); a later project whose pinned conf is
-  content-identical joins silently (same-pin projects never warn), and
-  real skew prints a warning naming the owner's conf and the
-  `kill-server` handover path instead of silently taking over.
-- **Agent-state dots now track background sessions too.** Background/daemon
-  fork-sessions of an agent (e.g. Claude background jobs) inherit the
-  identity env but not `$TMUX`, so their hook events updated the state
-  file (`vibe ps` said `working`) while the tui tab dot tracked only the
-  foreground session — the known v1 fidelity gap from the title-channel
-  smoke. agent-entry.sh now mints `VIBE_AGENT_CARRIER=tmux|none` alongside
-  the identity (same single cmd-array env prefix, computed from the same
-  condition that picks the tmux branch), and the hook's title-channel
-  guard accepts `$TMUX` *or* an inherited `carrier=tmux`. `DEV_AGENT_TMUX=0`
-  runs stay `carrier=none`, so they still can't stomp the title of an
-  unrelated same-named tmux session. Live from the checkout; no rebuild,
-  no settings re-merge (same hook script, same registrations). Takes
-  effect per agent on its next relaunch (running agents keep their
-  pre-carrier env).
-- **New: revdiff — read-only diff review (rebuild required).** The
-  2026-07-21 yazi re-evaluation split the review story in two: yazi stays
-  the general read-only browser (and image surface), and
-  [revdiff](https://github.com/umputun/revdiff) — a purpose-built,
-  read-only-by-construction diff-review TUI — becomes the "review what the
-  agent changed" surface. `v` toggles between the final file text and its
-  diff; annotations made during review print to stdout on quit — a
-  ready-made channel for handing review notes back to an agent. Pinned
-  goreleaser binary (amd64+arm64, upstream checksums verified) baked into
-  the image; palette entry "review diff (revdiff)" on `r` (runs with
-  `--untracked` so brand-new agent files show), or `vibe exec revdiff`
-  from any shell; doctor checks the binary. Deliberately NOT a top-level
-  `vibe` command while it's a trial — the command surface is ABI, and
-  revdiff gets a verb only if it earns harness logic of its own (e.g.
-  annotation capture feeding the agent). If the trial holds, its
-  annotations may eventually absorb the vibe review verdict flow.
-- **`vibe review` / the yazi surface is now locked read-only.** It was
-  always meant as a viewing/reviewing surface; now the config enforces it:
-  the harness keymap unbinds shell escape and every file operation
-  (remove, create, rename, cut, paste — `noop` also hides them from the
-  help panel; yazi has no command console, so unbound means unreachable),
-  and the openers are replaced wholesale so Enter/`o` view through
-  `less -R` — `$EDITOR` and system openers do not exist on this surface.
-  Approve/reject (A/R) and all navigation are untouched. Projects keep
-  the escape hatch by design: their keymap entries merge in front and can
-  deliberately re-bind an operation; a project-owned yazi.toml should
-  keep the `[opener]`/`[open]` block to keep the lock. Live from the
-  checkout immediately for `vibe review`; the baked copy behind the
-  tmux `prefix+i` preview window updates on rebuild.
-  `require_command` ran as a bare command under `set -e`, so a detected
-  lockfile whose tool wasn't installed aborted bootstrap regardless of
-  strictness — the documented warn-and-continue path was unreachable. The
-  tool preflight now lives inside `run_step`: strict=1 errors as before,
-  strict=0 warns and skips the step. (2026-07 external review.)
-- **Fix: a failing project post-start hook now fails `vibe up`.**
-  post-start.sh warned and exited 0 unconditionally, so `vibe up` reported
-  a ready environment even when the project's own hook said otherwise.
-  Under `DEV_BOOTSTRAP_STRICT=1` (the default) the hook's failure now
-  propagates; `0` keeps warn-and-continue. Doctor stays advisory in both
-  modes — its MISSes describe the environment, they don't mean the start
-  failed. (2026-07 external review.)
-- **Fix: `.gitmodules` migration residue.** This repo's own dogfood pin
-  carried the devcontainer-era section name (`submodule
-  ".devcontainer/harness"` with `path = .vibe/harness`) and an SSH URL —
-  a fresh public clone + `submodule update` demanded GitHub SSH
-  credentials for no reason. Renamed to `".vibe/harness"` with the HTTPS
-  URL. `install.sh --force` now also removes the legacy-named section, so
-  a forced reinstall on a migrated repo can't leave a stale registration.
-  (2026-07 external review.)
-- **Fix: per-checkout project identity — same-named checkouts no longer
-  share a compose namespace.** The project name was derived from the
-  workspace basename alone, so `~/dev/a/app` and `~/dev/b/app` collided on
-  the ENTIRE compose project — containers, sidecars, network, image tags —
-  and `vibe up`/`vibe down` in one could recreate or tear down the other
-  (the docs only ever admitted the agent-state volume overlap). The
-  identity is now `vibe-<basename>-<8-hex suffix>`, seeded from the
-  canonical checkout path into `.vibe/.project-id` on first use (per
-  checkout, auto-ignored via `.git/info/exclude`, worktree-friendly). The
-  FILE is the identity: moving a checkout keeps its containers; deleting
-  the file regenerates the same suffix in place. Checkouts that already
-  ran under the unsuffixed name adopt it automatically (probed via
-  compose's own project + working-dir labels, so a *different* same-named
-  repo can never trigger adoption), and nothing is persisted when the
-  docker daemon is unreachable, so a bad moment can't mint a wrong
-  identity. The agent-state volume name intentionally still derives from
-  the bare basename — that sharing is documented ABI
-  (docs/agent-state.md). verify.sh now covers the full branch matrix
-  through the real launcher with a stubbed docker; the in-container
-  command dispatch gained a `VIBE_SKIP_CONTAINER_DISPATCH` dev escape
-  hatch to make that possible.
-- **tmux 3.7b + chafa 1.18.2, built from source (rebuild required).** Debian
-  stable pins tmux 3.5a and chafa 1.14.5; both moved from apt to a pinned,
-  checksummed source-build stage in the Dockerfile (`TMUX_VERSION`/
-  `CHAFA_VERSION` ARGs, `--enable-sixel`). Why: a 2026-07-21 dogfood spike
-  showed 3.7b retains sixel images while an agent TUI redraws in the
-  adjacent split — the exact case 3.5a degraded to placeholders, and the
-  reason the review window is a full window instead of a split (a resize
-  still clears images; that reflow behavior is upstream). chafa 1.18.2
-  brings `--probe` (yazi's cell-art fallback — doctor's NOTE about it now
-  passes) and the newer kitty/passthrough work; source-building also ends
-  the missing-upstream-arm64-static problem. Behavior is otherwise
-  unchanged: `vibe show` keeps `--passthrough tmux` inside tmux until the
-  native-ingest path is validated in-image (see BACKLOG); if it holds, the
-  full-window review workaround can be revisited.
-- **New: `vibe-svc` — the services session is real now.** The docs promised
-  "a services session your post-start hook stands up, `vibe attach` is the
-  door in" with no machinery behind it. `vibe-svc NAME COMMAND...` (baked
-  into the image; rebuild once after crossing this release) idempotently
-  runs a workspace process as window NAME in the shared services tmux
-  session — safe on every container start, logs in the scrollback, crashed
-  services restart on the next run. It deliberately does NOT load `.env`
-  (wrap with `env-run.sh` when a service needs secrets). `vibe attach`'s
-  no-argument default changes `main` → `services` so the door and the
-  populater agree (the old `main` was always empty — nothing populated it).
-  New [docs/services.md](docs/services.md) is the chooser: compose sidecars
-  for independent daemons, `vibe-svc` for workspace processes, host-program
-  patterns for the rest; the roblox Rojo example now uses it.
-- **Sidecar services are first-class: `vibe down` and `vibe status` are
-  compose-native.** A project service added to `.vibe/compose.yaml` (a
-  database, a cache) always STARTED with `vibe up`, but was invisible to
-  `status` and orphaned by `down` — both filtered on the `vibe.project`
-  label only the dev service carries. `down` now runs
-  `compose down --remove-orphans` (named volumes — agent state and sidecar
-  data — survive), degrading to label cleanup when the compose files don't
-  parse (a half-migrated repo can never strand containers), and still
-  removes legacy devcontainer-era containers. `status` lists every project
-  service with a SERVICE column via the compose-project label. Also fixes a
-  real bug: the old `status` passed both label filters to one `docker ps`,
-  which ANDs them — the table was always empty.
-- **Seeded compose: every `INSTALL_*` toggle is now a live rendered line.**
-  The template previously mixed three mechanisms — bun/rokit rendered,
-  codex/grok/node as commented lines install.sh sed-uncommented, playwright
-  as a seeded extension. Now all seven toggles (including the previously
-  implicit `INSTALL_CLAUDE_CODE: "true"`) render with their actual values;
-  flipping one is edit-in-place + `vibe rebuild`. The codex⇒Node implication
-  is noted inline (the Dockerfile auto-installs Node for the npm-distributed
-  Codex CLI — `INSTALL_CODEX: "true"` alone always worked). `enable_arg`
-  (the comment-uncommenting sed) is gone; extras set render values instead.
-  Existing seeded files keep working — this changes what NEW installs seed.
-- **Image hooks retargeted: agent images reach the reviewer you actually
-  watch.** The Claude Code hook now delivers to a live `vibe review`
-  first — `review.sh` registers its yazi (pid + DDS id; `exec` keeps the
-  pid, so liveness is a `/proc` check) and the vibe plugin subscribes to
-  a `vibe-reveal` DDS kind. Delivery there is a toast plus a remembered
-  path with a new `g i` keybind to jump on demand — deliberately no
-  auto-reveal, so nothing yanks the cursor/cwd while you browse. The
-  tmux `preview` window remains the fallback (no live reviewer) with its
-  auto-reveal behavior unchanged; the hook also no longer requires tmux
-  when a reviewer is up (works with `DEV_AGENT_TMUX=0`).
-- **New: `vibe open [LAYOUT]` — the workspace as native terminal panes.**
-  Windows Terminal adapter (prototype): `default` opens agent (70%) |
-  shell/review, `agents` opens claude | codex, `tabs` gives the agent a
-  whole tab with shell/review stacked in a second tab (portrait monitors;
-  Ctrl+Tab toggles). Every pane runs one stable `vibe` command and attaches
-  to its own per-variant tmux session, so the terminal owns layout and
-  rendering while tmux keeps persistence (close the window, lose nothing).
-  Panes adopt the WT profile named after the WSL distro so distro color
-  schemes survive (`VIBE_OPEN_PROFILE` overrides; without `-p`, wt paints
-  commandline panes with the default profile's looks). Without `wt.exe` it
-  prints the per-pane commands — the intended degraded mode and the macOS
-  story for now. `VIBE_OPEN_LAYOUT` (host env) sets the no-argument
-  default layout; an explicit argument wins. Layouts are hardcoded;
-  config-driven layouts are on the backlog.
-- **BREAKING: the host `GH_TOKEN` passthrough is gone.** The base compose
-  no longer forwards `GH_TOKEN` into the container environment — container
-  env is baked at create time and visible to every process, the wrong
-  place for a credential. GitHub auth is `gh auth login` inside the
-  container (fine-grained PAT pasted once; persists in the agent-state
-  volume). If you keep a reference PAT in `.env`, use a neutral name —
-  `GH_TOKEN`/`GITHUB_TOKEN` there would override the stored login in every
-  `vibe agent`/`vibe run` process (docs/configuration.md). Crossing note
-  in docs/updating.md.
-- The compose-migration guide in docs/updating.md got fixes earned by
-  dogfooding it: seed `.vibe/compose.yaml` from the pre-rendered
-  `examples/<preset>/` (the raw template's `@PLACEHOLDER@`s only
-  install.sh renders), reseed `.vibe/AGENTS.md` (the old seeded copy
-  gives agents retired instructions), guard the root symlink against an
-  existing real `vibe` file, macOS-safe `sed -i.bak`, and `./vibe down`
-  before the first `./vibe up` (dual-container hazard).
-- BACKLOG.md now carries the post-review direction: `vibe open` (host
-  terminal-layout adapter, Windows Terminal first) is the first feature
-  after v1.0, worktree productization follows, the repository rename is
-  scheduled pre-v1.0, and decision records reject the session-backend
-  abstraction and defer version-lock machinery.
+The delta since v0.7.3 is a re-founding: a new engine, a new front door, and
+a new host security architecture. Grouped by theme, breaking changes first.
+
 - **BREAKING: the devcontainer engine is gone — `vibe` drives docker
   compose + docker exec directly.** Host requirements drop to git + docker
-  (no Node, no `@devcontainers/cli`, no npx fallback). The container is
-  defined by the harness base compose file (`compose/base.yaml`: workspace
-  mount, agent-state volume, hardening, environment, `vibe.project` label)
-  with the project-owned `.vibe/compose.yaml` merged on top via `-f`
-  stacking; the new `vibe config` prints the merged result. `vibe up` runs
-  compose and then the lifecycle itself: `post-create.sh` once per
-  container (marker at `/var/tmp/.vibe-post-created`), `post-start.sh` on
-  every actual start. Everything exec'd runs through `docker exec` (with a
-  real pty when the caller has one — something `devcontainer exec` never
-  offered).
+  (no Node, no `@devcontainers/cli`). The container is defined by the
+  harness base compose file (workspace mount, agent-state volume,
+  hardening, environment, `vibe.project` label) with the project-owned
+  `.vibe/compose.yaml` merged on top via `-f` stacking; `vibe config`
+  prints the merged result. `vibe up` runs compose and then the lifecycle
+  itself: `post-create.sh` once per container, `post-start.sh` on every
+  start. Everything exec'd runs through `docker exec` with a real pty.
   - **The consumer layout is now `.vibe/`** (compose.yaml, config.env,
-    vibe wrapper, AGENTS.md, project/ hooks, yazi/, harness submodule) and
-    install.sh links a root-level `./vibe` symlink — the everyday spelling
-    is `./vibe up`. `devcontainer.json` is retired; ports are honest
-    compose `ports:` entries (loopback-only policy unchanged), extra env
-    and mounts are compose keys, and the `updateRemoteUserUID` behavior
-    became an explicit `USER_UID` build arg (WSL's 1000 is the no-op
-    default).
-  - **Migration is one commit** — docs/updating.md → "Migrating to the
-    compose engine": `git mv .devcontainer .vibe`, seed compose.yaml from
-    the template, port customizations over, fix hook paths, `vibe up`.
-    Agent logins survive: the state-volume name is unchanged (and now
-    documented as an ABI). `vibe update`, `repo-root.sh`, `lib.sh`, and
-    the review/config walks all still recognize the legacy layout so an
-    old project can pull this release and migrate from inside it;
-    `vibe status`/`down` also match the old devcontainer-CLI container
-    label for cleanup.
-  - **Retired**: VS Code `customizations` blocks and per-preset extension
-    lists (the harness no longer involves VS Code; WSL Remote/local
-    editing work as before), the `features/` directory — playwright-deps
-    is now the `INSTALL_PLAYWRIGHT_DEPS` build arg (+ optional
-    `PLAYWRIGHT_VERSION` pin), the `GH_TOKEN` passthrough (removed
-    entirely — dedicated entry below), and the
-    `DEVCONTAINER_CLI_SPEC` override.
-  - CI's image-build job uses `./vibe build` (compose) instead of
-    installing the devcontainer CLI.
-  - **New: project image extensions replace Dockerfile flag creep.** The
-    compose base now has a build-only `base` service producing the shared
-    image (`${VIBE_PROJECT_NAME}-base`); `dev` runs that tag. A project
-    needing system-level tooling chains its own `.vibe/Dockerfile`
-    (`FROM ${VIBE_BASE_IMAGE}`, root work at build time, ends
-    `USER vscode`) and declares `image: ${VIBE_PROJECT_NAME}-dev` + a
-    `build:` block — the launcher sequences base → extension builds
-    (`vibe up` builds when images are missing; `vibe rebuild` always
-    rebuilds both, cache-honoring). Contract and rationale:
-    docs/extending.md; worked examples in `examples/extensions/`
-    (playwright, blender — Debian package, amd64+arm64). Consequences:
-    `INSTALL_PLAYWRIGHT_DEPS`/`PLAYWRIGHT_VERSION` are **removed** from
-    the shared Dockerfile (playwright is the first extension;
-    `install.sh --extras playwright` now seeds `.vibe/Dockerfile` +
-    `.vibe/.dockerignore` and appends the dev build block), project build
-    args move under `services.base.build.args`, and runtime hardening
-    (`user: vscode`, cap-drop, no-new-privileges) stays compose-side so no
-    extension image can weaken the running container. Compose-native build
-    chaining (`additional_contexts: service:`) was evaluated and rejected
-    for now: needs compose ≥ 2.33 + opt-in bake and has open ordering/
-    profile bugs; the launcher sequencing uses only ancient compose
-    features and the on-disk contract can adopt it later unchanged.
+    AGENTS.md, project/ hooks, yazi/, harness submodule).
+    `devcontainer.json` is retired: ports are
+    compose `ports:` entries (loopback-only policy unchanged), extra
+    env/mounts are compose keys, and `updateRemoteUserUID` became an
+    explicit `USER_UID` build arg. Migration is one commit
+    (docs/updating.md "Migrating to the compose engine"); agent logins
+    survive because the state-volume name is unchanged (documented ABI).
+    The legacy layout is still recognized well enough to migrate from
+    inside it, and `status`/`down` still clean up devcontainer-era
+    containers.
+  - **Retired:** VS Code `customizations` blocks and per-preset extension
+    lists, the `features/` directory, and the `DEVCONTAINER_CLI_SPEC`
+    override. CI builds via `./vibe build`.
+  - **New: project image extensions replace Dockerfile flag creep.** A
+    build-only `base` service produces the shared image; a project needing
+    system tooling chains its own `.vibe/Dockerfile`
+    (`FROM ${VIBE_BASE_IMAGE}`, ends `USER vscode`) and the launcher
+    sequences base → extension builds. Runtime hardening stays
+    compose-side, so no extension image can weaken the running container.
+    Contract in docs/extending.md; worked examples (playwright, blender)
+    in `examples/extensions/`. `INSTALL_PLAYWRIGHT_DEPS`/
+    `PLAYWRIGHT_VERSION` moved out of the shared Dockerfile accordingly.
   - **New install UX: submodule-first + interactive.** The recommended
-    install is now two git-native commands from the project root —
-    `git submodule add <url> .vibe/harness` then `.vibe/harness/install.sh`
-    — no scaffold clone, no `curl | sh`, no npx: the submodule is the
-    delivery mechanism, so everything arrives over git and is pinnable and
-    diffable (`./vibe update vX.Y.Z` pins a release after). install.sh
-    detects it is running from a project's `.vibe/harness` (target implied,
-    submodule step skipped or absorbed, rerun refuses and points at
-    `vibe update`). With no arguments on a terminal it interviews: preset,
-    optional extras, confirm — any argument keeps exact flag behavior for
-    scripts/CI. New `--extras codex,grok,node,playwright` enables those
-    build args in the seeded compose.yaml (`playwright` implies `node`);
-    the scaffold-clone flow is unchanged for multi-project/development use.
-    The onboarding agent prompt now uses the submodule-first flow.
-  - **Repo reorganized under `src/`** (same breaking release, so the path
-    change costs consumers nothing extra): `Dockerfile`, `compose/`,
-    `config/`, `scripts/`, `templates/` moved to `src/*`; entry points
-    (`vibe`, `install.sh`, `verify.sh`) stay at the root. Seeded consumer
-    references are `.vibe/harness/src/...` accordingly, and the compose
-    build context is `.vibe/harness/src` so the Dockerfile's COPY paths
-    are unchanged. New top-level **`examples/`**: the exact files each
-    preset seeds, rendered by `examples/render.sh` and kept in lockstep
-    with `src/templates/` by verify.sh (it diffs them against a real
-    install of every preset).
-- **Changed: image review is now [yazi](https://yazi-rs.github.io/).** The
-  homegrown viewer (`preview-viewer.sh`, ~500 lines of tmux/sixel handling)
-  is deleted — dogfooding judged it clunky, and yazi is the same class of
-  solution (a compiled program that owns decoding and terminal protocols)
-  maintained upstream. Pinned by version + checksum per arch in the
-  Dockerfile, with `file(1)` for mime detection. **Rebuild required.**
-  - `vibe review [DIR]` opens yazi in the invoking terminal;
-    prefix+`i` opens it as the dedicated tmux `preview` window
-    (`scripts/review.sh`, baked as `vibe-preview` — same fixed name, so old
-    tmux configs keep working).
-  - **Review is a first-party yazi plugin (`vibe.yazi`) with status**:
-    `A` approves, `R` rejects with an optional note via yazi's input box
-    (both unbound in yazi's defaults — `a`/`r` keep create/rename), each
-    confirmed by a toast, and judged files carry a persistent ✓/✗ badge
-    column (the `verdict` linemode; existing verdicts load as soon as a
-    directory is entered, including at startup).
-    Verdicts append via the baked `vibe-verdict` helper to
-    `.review-decisions.jsonl` beside the reviewed images — a dotfile, so it
-    never steals the newest-first hover (`VIBE_REVIEW_DECISIONS` overrides
-    the target; `VIBE_PREVIEW_DECISIONS` is gone).
-  - **Config is layered**: the harness carries the machinery (plugin, review
-    keymap, badge linemode) and updates with the pin; the seeded
-    project-owned `.devcontainer/yazi/` overrides `yazi.toml`/`theme.toml`
-    wholesale, merges its `keymap.toml` entries in front (project wins on
-    conflict), and its `init.lua` runs after the harness's. Existing
-    projects adopt the seed during a pin-update reconcile; without it,
-    review still works on the harness defaults.
-  - The Claude Code hook now reveals images in the running yazi over DDS
-    (`ya emit-to`) instead of a flock-guarded queue file.
-  - tmux.conf adds `update-environment TERM`/`TERM_PROGRAM` (yazi's
-    protocol detection); `vibe show` and its img2sixel/chafa pixel-exact
-    one-shot path are unchanged.
-- **New: `vibe update [TAG]`.** The recommended update flow from
-  docs/updating.md as one command: fetch tags, print the CHANGELOG sections
-  between the two pins and the diff stat, check out the newest (or given)
-  tag, and **stage** the pin move — never commits, never rebuilds. Reports
-  whether a rebuild is required (`Dockerfile` changed) or recommended (baked
-  script/config copies changed), and flags `templates/` changes for
-  project-owned-file reconciliation. Rolling back is the same command with an
-  older tag. Works identically inside the container — agents run
-  `bash .devcontainer/harness/scripts/update.sh` (now referenced in the
-  seeded `AGENTS.md`) and hand the printed rebuild step to the host.
-- **New: `vibe doctor` reports harness pin freshness** — a non-failing `NOTE`
-  when the pin is behind the newest already-fetched tag. Offline by design:
-  doctor never touches the network; `vibe update` is what fetches.
-- **Changed: `vibe agent` / `vibe attach` logic moved container-side** into
-  `scripts/agent-entry.sh`. The launcher no longer inlines single-quoted
-  `bash -lc` payloads with positional smuggling — the entry script receives
-  real argv via `devcontainer exec`. Behavior is unchanged (`--cold`, `-a`,
-  tmux sessions, `.env`-in-pane-only all as before); the flags are now
-  parsed in-container.
-- **New: git-hook wiring is loud.** `DEV_AUTO_GIT_HOOKS` still defaults on
-  (it wires only the consuming repo's own `.githooks/`), but the boundary
-  crossing is now visible every run: doctor emits a `NOTE` whenever
-  `core.hooksPath` is set (the hooks also run host-side via the shared
-  mount — see docs/security.md), and post-create logs the wiring when it
-  does it.
-- **Changed: one repo-root walk for host tools.** The `$PWD` ancestor
-  discovery is now shared (`scripts/repo-root.sh`, sourced by `vibe` and
-  `update.sh`) instead of duplicated; `lib.sh` documents why lifecycle
-  scripts deliberately anchor differently. `verify.sh`'s bash-3.2 gate now
-  also covers `update.sh` and the new helper.
-- **Changed: the preview hook derives its image-extension regexes from
-  `VIBE_IMAGE_EXTS`** in `preview-lib.sh` (sed-extracted, never sourced —
-  hook stdout must stay empty) instead of three hardcoded copies.
-- **Docs: positioning explicitly owns the terminal affordances**
-  (`clip`/`show`/`review`) as part of "the environment"; driving agents
-  remains a non-goal. `BACKLOG.md` now carries the real roadmap: the
-  reduced-trust profile and the recorded Go-migration triggers for the
-  preview subsystem.
-- **Fixed: the baked preview lib/config was unreadable by the container
-  user** (since v0.7.3) — `COPY --chmod=0644` also applies to the parent
-  directory it implicitly creates, so `/usr/local/lib/vibe` ended up 0644
-  and untraversable: the baked `vibe-preview` (tmux `prefix+i`) silently
-  launched stock yazi with no review keys, and `vibe show`'s baked-lib
-  fallback failed. The Dockerfile now normalizes the tree (**rebuild
-  required**), and `vibe doctor` reports the readability (MISS on broken
-  images) plus a NOTE on the chafa/yazi pairing: chafa < 1.16 lacks
-  `--probe`, so yazi's cell-art fallback errors out in terminals without a
-  graphics protocol (e.g. the VS Code terminal); sixel-capable terminals
-  are unaffected. Debian trixie ships chafa 1.14.5 — upgrading it is an
-  open decision (upstream static builds have no arm64; source build adds
-  weight).
-- Removed the legacy `.devcontainer/dev` exec-bit self-heal (pre-v0.4.0
-  wrapper name).
+    install is `git submodule add <url> .vibe/harness` then
+    `.vibe/harness/install.sh` — everything arrives over git, pinnable and
+    diffable. With no arguments on a terminal it interviews (preset,
+    `--extras codex,grok,node,playwright`, confirm); any argument keeps
+    exact flag behavior for scripts/CI.
+  - **Repo reorganized under `src/`** (same breaking release, so the move
+    costs consumers nothing): harness internals in `src/*`, entry points
+    at the root, and top-level `examples/` holds the exact files each
+    preset seeds, kept in lockstep by verify.sh.
+  - **Seeded compose: every `INSTALL_*` toggle is a live rendered line**
+    (including the previously implicit `INSTALL_CLAUDE_CODE`); flipping
+    one is edit-in-place + `vibe rebuild`. The codex⇒Node implication is
+    noted inline.
+- **BREAKING: host root of trust — host-executed code moved out of the
+  workspace bind.** The 2026-07-22 security review showed that any
+  host-side execution of container-writable files (the workspace `./vibe`,
+  tui hook scripts inside the checkout) lets a compromised container
+  process escalate to host code execution. The fix is an architectural
+  relocation:
+  - **`~/.vibe` store + shim.** `install.sh --self` installs a host store:
+    `~/.vibe/bin/vibe` (the ONLY stable host entry point — put it on
+    PATH), immutable verified versions under `~/.vibe/versions/<sha>/`
+    (whole-tree sha256 manifest checked before every exec), a host-owned
+    mirror of the harness repo, and per-project trust records. The
+    workspace `./vibe` no longer executes on the host — it survives
+    in-container only. First contact with a project prompts to trust its
+    pin (TOFU; publisher authenticated against the canonical host-owned
+    mirror remote); the root `./vibe` symlink of the interim layout is
+    gone (install.sh removes a legacy one). `vibe provision` is the
+    non-interactive form for
+    CI/cron, `vibe self-update` refreshes the store, and `vibe dev`
+    (dev mode) snapshots a working tree — including uncommitted changes —
+    into an immutable version for harness development.
+  - **The container sees the harness read-only,** overmounted at
+    `.vibe/harness` from the store, so in-container agents can read (and
+    `./vibe` can run) the harness but can never rewrite what the host
+    executes. Container consumers take the project name from
+    `$VIBE_PROJECT_NAME` instead of trusting workspace files.
+  - **The compose boundary is enforced, not assumed.** Before touching the
+    daemon, the launcher snapshots the compose input closure, renders it
+    under a sanitized environment, and STRUCTURALLY verifies the rendered
+    model: the dev service must keep `user: vscode`, `cap_drop: ALL`,
+    `no-new-privileges`, must not be privileged or unconfine
+    seccomp/apparmor; bind-mount sources are restricted (workspace,
+    docker socket never, store binds only as THE read-only harness
+    overmount); host-reading compose features (`include`/`extends`/
+    `env_file`/file-backed configs+secrets/local-driver device binds) are
+    refused; the extension build context is frozen. Render and daemon see
+    byte-identical input. `--unsafe` (global flag) disables the boundary
+    for one command, loudly.
+  - **`vibe update` is mirror-only.** It fetches into the host mirror,
+    verifies, and stages the pin move via `git update-index` — host git
+    porcelain never runs against the workspace checkout (whose hooks and
+    filters are container-writable).
+  - **The tui trusts the store, not the checkout.** Host hooks resolve
+    scripts through a per-session harness dir pointing into the store;
+    the first post-upgrade `vibe tui` refuses to join a pre-upgrade
+    (unsafe) server and asks for `--fresh`; `vibe doctor` checks the
+    overmount is present and read-only.
+  - **Trust stance (documented in docs/security.md "What is trusted"):**
+    the project's compose/code is the OWNER's configuration and is
+    trusted; the boundary defends against a compromised container process
+    tampering its way to the host, not against a hostile project author.
+    install.sh and first-contact warn to read a third-party repo's
+    `.vibe/` before the first `vibe up`.
+- **BREAKING: the host `GH_TOKEN` passthrough is gone.** Container env is
+  baked at create time and visible to every process — the wrong place for
+  a credential. GitHub auth is `gh auth login` inside the container
+  (fine-grained PAT pasted once; persists in the agent-state volume). A
+  reference PAT kept in `.env` must use a neutral name: `GH_TOKEN`/
+  `GITHUB_TOKEN` there would override the stored login (docs/
+  configuration.md; crossing note in docs/updating.md).
+- **The repository is now `vibe-tui-box`** (was the devcontainer-era
+  name). GitHub redirects old clone/submodule URLs indefinitely; walk
+  consumer `.gitmodules` URLs forward at the next pin bump. The CLI stays
+  `vibe`.
+- **New: `vibe tui` — the front door.** The workspace as a riced HOST-side
+  tmux (socket `-L vibe`, needs tmux ≥ 3.4 on the host; a pinned 3.7b
+  source build ships via `src/scripts/host/install-tmux.sh`): agent pane
+  over a collapsible host-shell bottom dock, tabbed windows with
+  agent-state dots, a command palette on `prefix+Space` (clip, git popup,
+  review, new/named agents, project switcher), and a clickable
+  cross-project sidebar (below). Layout-vs-persistence split: host tmux
+  owns layout/theme/tabs; the container's per-agent tmux sessions keep
+  persistence, so closing the terminal loses nothing. Composing
+  `vibe agent` / `vibe shell` / `vibe review` panes manually in any
+  terminal remains the no-tmux fallback.
+  - Multi-project: one session per project on the shared socket.
+    Server styling is first-owner-authoritative (a later project with an
+    identical pinned conf joins silently; real skew warns and names the
+    kill-server handover instead of silently restyling). "Switch project"
+    lives in the palette and on `prefix+o` (tmux session tree,
+    live-sessions-only by design — no registry). Quitting one project's
+    tui exits that client (`detach-on-destroy on`) instead of teleporting
+    it into another project's session.
+  - **The sidebar** is the cross-project glance: every project with its
+    agents' state dots, git branch, and a fleet-wide agent roster
+    ("glyph name · project"), click-to-switch, fixed width
+    (`@vibe_sidebar_w`), global toggle on `prefix+b`, one per window in
+    lockstep. `prefix+t` collapses the host dock to a one-row strip.
+  - Flags: `--kill` (stop the UI server — all projects' tui sessions;
+    container agents unaffected), `--fresh` (kill + clean relaunch — the
+    reset story), `--detach` (build/heal a project's session without
+    attaching, to put it on a running tui's sidebar from any shell).
+  - Internals hardening along the way: conf hooks resolve scripts through
+    a launch-stamped harness dir instead of running the session-cwd's
+    `./vibe` per event; palette + state→glyph map single-sourced in
+    `src/config/theme.sh`; sidebar refresh is serial-gated (idle tick is
+    one tmux round trip); nested-tmux footgun closed (container tmux under
+    the tui drops its prefix + status bar so `C-b c` can't make invisible
+    windows).
+- **New: agent state at a glance — live dots + `vibe ps`.** Claude Code
+  hook events map to `working`/`attention`/`idle`/`exited` per agent
+  session and render as tab/sidebar dots in the tui, event-driven end to
+  end (no polling anywhere): the in-container hook updates the inner tmux,
+  which re-emits state as an OSC pane title through the existing
+  `docker exec` tty; the host server's `pane-title-changed` hook renders
+  it. Attention flashes the tab; a dead frontend pane renders `◌`;
+  process death dominates semantic state. Identity rides an env prefix
+  (`VIBE_AGENT_SESSION`/`INSTANCE`/`CARRIER`) minted by agent-entry, so
+  background/daemon forks of an agent are tracked too, and
+  `DEV_AGENT_TMUX=0` runs can't stomp another session's title. Hookless
+  agents (grok) deliberately cap at running/exited.
+  - **`vibe ps`** renders the glance anywhere: agents (state, liveness,
+    age — read-time staleness only) plus the services-session windows.
+  - **`vibe agent -s NAME`** runs a parallel instance of the same agent in
+    its own session (`agent-NAME`); without it a second `vibe agent`
+    reattaches the running one.
+  - Hook registration merges idempotently into `.claude/settings.json`
+    via `settings-merge.sh` on container create — additive-only, user
+    placement wins; the rebuild after a pin bump IS the migration.
+- **tmux 3.7b + chafa 1.18.2, built from source (rebuild required).**
+  Debian pins tmux 3.5a / chafa 1.14.5; both moved to pinned, checksummed
+  source builds (`--enable-sixel`). 3.7b retains sixel images through
+  adjacent-pane TUI redraws (the 3.5a failure behind the old full-window
+  review workaround); a resize still clears images (upstream reflow —
+  rerun repaints). Inside tmux, `vibe show` now uses native sixel ingest
+  (the container tmux declares `terminal-features ",*:sixel"`) — the only
+  rendering that survives the tui's host-tmux→container-tmux nesting;
+  chafa 1.18 also fixes yazi's `--probe` fallback (doctor's old NOTE).
+- **Changed: image review is [yazi](https://yazi-rs.github.io/), locked
+  read-only.** The ~500-line homegrown viewer is deleted; yazi (pinned by
+  version + checksum per arch) is the review surface: `vibe review [DIR]`
+  in the invoking terminal, `prefix+i` as the dedicated tmux preview
+  window. The vibe plugin adds `A` approve / `R` reject-with-note and
+  persistent ✓/✗ badges, appending to `.review-decisions.jsonl`. The
+  harness keymap unbinds shell escape and every file operation, and
+  openers are replaced wholesale (Enter views through `less -R`) — a
+  project-owned `.vibe/yazi/` can still deliberately re-bind. The Claude
+  Code image hook reveals into a LIVE `vibe review` first (toast + `g i`
+  jump on demand — no cursor theft), falling back to the tmux preview
+  window's auto-reveal; with a live reviewer it no longer requires tmux.
+- **New: revdiff — read-only diff review trial (rebuild required).**
+  [revdiff](https://github.com/umputun/revdiff) (pinned, checksummed) is
+  the "review what the agent changed" surface: tree + diff panes, `v`
+  toggles file text ↔ diff, annotations print to stdout on quit. Palette
+  entry `r` (runs `--untracked`) or `vibe exec revdiff`; deliberately NOT
+  a top-level command while it's a trial — the command surface is ABI.
+- **Fix: per-checkout project identity — same-named checkouts no longer
+  share a compose namespace.** The project name was derived from the
+  workspace basename alone, so two checkouts named `app` collided on the
+  entire compose project and could tear each other down. Identity is now
+  `vibe-<basename>-<8-hex suffix>` seeded from the canonical path into
+  `.vibe/.project-id` (per checkout, auto-ignored, worktree-friendly);
+  pre-existing unsuffixed projects adopt automatically via compose's own
+  labels. The agent-state volume still derives from the bare basename —
+  documented ABI (docs/agent-state.md).
+- **New: `vibe-svc` + compose-native lifecycle.** `vibe-svc NAME CMD...`
+  idempotently runs a workspace process as a window in the shared
+  services tmux session (safe on every start, logs in scrollback; no
+  `.env` — wrap with env-run.sh); `vibe attach` defaults to `services`.
+  `vibe down` is `compose down --remove-orphans` (named volumes survive),
+  so project sidecars are no longer orphaned; `vibe status` lists every
+  project service (the old status ANDed label filters and was always
+  empty). docs/services.md is the sidecar/vibe-svc/host-program chooser.
+- **New: `vibe update [TAG]`** — fetch, print the CHANGELOG delta + diff
+  stat, and stage the pin move (never commits, never rebuilds); reports
+  whether a rebuild is required and flags template changes for
+  reconciliation. Works identically in-container. (Post root-of-trust it
+  operates mirror-only — see that entry.) **`vibe doctor`** notes pin
+  staleness offline (never touches the network).
+- **Smaller changes:**
+  - `vibe agent`/`vibe attach` logic moved container-side
+    (agent-entry.sh receives real argv — no more quoted `bash -lc`
+    payload smuggling).
+  - Git-hook wiring is loud: doctor NOTEs whenever `core.hooksPath` is
+    set (hooks also run host-side via the shared mount), post-create logs
+    the wiring.
+  - A failing project post-start hook now fails `vibe up` under
+    `DEV_BOOTSTRAP_STRICT=1` (the default); the documented
+    warn-and-continue path (`0`) actually works now, as does tool
+    preflight under strictness 0. (2026-07 external review.)
+  - `.gitmodules` migration residue fixed (devcontainer-era section name
+    + SSH URL demanded credentials on fresh public clones);
+    `install.sh --force` removes the legacy-named section.
+  - One shared repo-root walk for host tools (repo-root.sh); the preview
+    hook derives image-extension regexes from `VIBE_IMAGE_EXTS` instead
+    of three hardcoded copies; positioning doc owns the terminal
+    affordances (clip/show/review) — driving agents remains a non-goal.
+  - Fixed: `/usr/local/lib/vibe` baked unreadable by the container user
+    (`COPY --chmod` also chmods implicitly created parents), which
+    silently launched stock yazi without review keys (rebuild required).
+  - Removed the legacy `.devcontainer/dev` exec-bit self-heal.
 
 ## v0.7.3 — 2026-07-19
 

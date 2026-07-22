@@ -17,13 +17,16 @@ launcher — no devcontainer CLI, no Node on the host, no VS Code required
 
 ```text
 my-project/
-├── vibe                # → .vibe/vibe (the everyday entry point)
 └── .vibe/
     ├── compose.yaml    # project policy (image args, mounts, ports)
     ├── config.env      # project behavior toggles
     ├── project/        # project lifecycle hooks
     └── harness/        # ← this repository, as a submodule
 ```
+
+The everyday entry point is the `vibe` command the installer puts on your
+PATH — host code runs from a verified store (`~/.vibe`), never from the
+container-writable checkout ([security model](docs/security.md)).
 
 - [What you get](#what-you-get)
   - [Security](#security)
@@ -83,7 +86,9 @@ On a terminal the installer interviews you (preset, optional extras like
 mechanism: everything arrives over git — no `curl | sh`, no npx, nothing
 runs that you can't pin and diff — and the installer only seeds
 project-owned files and **stages** them for your review; commit when
-satisfied. Pin a specific release afterwards with `./vibe update vX.Y.Z`.
+satisfied. It also bootstraps the host trust store (`~/.vibe` — the `vibe`
+shim on PATH; `--no-self` skips). Pin a specific release afterwards with
+`vibe update vX.Y.Z`.
 
 Installing many projects from one scaffold clone, all options, and
 uninstall: [docs/installation.md](docs/installation.md). The judgment calls
@@ -112,8 +117,8 @@ examples in [`examples/extensions/`](examples/extensions/)).
 
 ```bash
 cd ~/dev/my-project
-./vibe up
-./vibe agent
+vibe up
+vibe agent
 ```
 
 ## Common commands
@@ -127,7 +132,7 @@ cd ~/dev/my-project
 | `vibe clip`      | Save the host clipboard image for the container (image-paste workaround) |
 | `vibe show`      | Preview an image in the terminal (default: newest `vibe clip` capture) |
 | `vibe review [DIR]` | Browse/review images with yazi; `A` approves, `R` rejects (optional note) to `.review-decisions.jsonl` beside the images |
-| `vibe tui`      | The workspace as a riced host-side tmux: agent pane, host shell pane, tabs, command palette |
+| `vibe tui`      | The workspace as a riced host-side tmux: agent pane, host dock, tabs, project sidebar, command palette |
 | `vibe config`    | Print the merged compose config (base + project override) |
 | `vibe doctor`    | Check the environment (run this first when things break)  |
 | `vibe rebuild`   | Fresh image + container after editing `compose.yaml`/Dockerfile |
@@ -139,7 +144,7 @@ Full list and typical workflows: [docs/usage.md](docs/usage.md).
 Projects pin the harness to a commit; updating is an explicit, reviewable step:
 
 ```bash
-./vibe update    # fetch, show changelog delta + diff, checkout, stage
+vibe update    # fetch, show changelog delta + diff, checkout, stage
 ```
 
 …which automates the manual flow (and `vibe update vX.Y.Z` targets or rolls
@@ -167,7 +172,7 @@ effect — the practical difference is which changes need a rebuild (only
 `compose.yaml`):
 
 ```text
-./vibe up ─► build images      ◄─ .vibe/compose.yaml — args · mounts · ports (vibe rebuild to apply)
+vibe up   ─► build images      ◄─ .vibe/compose.yaml — args · mounts · ports (vibe rebuild to apply)
           ─► create container     non-root · cap_drop ALL · workspace + agent-state volume
           ─► post-create          once per container · lockfile bootstrap · project/post-create.sh
           ─► post-start           every start · doctor · gh wiring · project/post-start.sh

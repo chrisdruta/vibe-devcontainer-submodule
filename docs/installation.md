@@ -50,7 +50,7 @@ copy. Add `~/.vibe/bin` to your PATH if the bootstrap says it isn't there. Insid
 the container, a `vibe` on the container PATH is the in-container spelling.
 
 The pin is whatever `git submodule add` cloned (branch tip); pin a tagged
-release afterwards with `./vibe update vX.Y.Z` — it stages the move for
+release afterwards with `vibe update vX.Y.Z` — it stages the move for
 review like everything else.
 
 To have an agent make the judgment calls (build args, hooks, migrating an old

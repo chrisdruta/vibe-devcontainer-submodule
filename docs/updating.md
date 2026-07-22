@@ -7,8 +7,8 @@ review-the-diff moment, not a blind pull.
 ## Fastest: `vibe update`
 
 ```bash
-./vibe update          # newest release tag
-./vibe update v0.7.3   # a specific tag — same command rolls back
+vibe update          # newest release tag
+vibe update v0.7.3   # a specific tag — same command rolls back
 ```
 
 One command for the recommended flow below: fetches tags, prints the
@@ -30,7 +30,7 @@ git -C .vibe/harness checkout v1.0.0
 git diff --submodule .vibe/harness       # review what changed
 git add .vibe/harness
 git commit -m "Update vibe harness to v1.0.0"
-./vibe rebuild                            # if the Dockerfile changed
+vibe rebuild                            # if the Dockerfile changed
 ```
 
 Tags mark intentional upgrade points and rollback targets; rolling back is the same
@@ -62,8 +62,8 @@ done
 
 ## After updating
 
-- Run `./vibe doctor`.
-- Run `./vibe rebuild` when the update touched the `Dockerfile` or
+- Run `vibe doctor`.
+- Run `vibe rebuild` when the update touched the `Dockerfile` or
   anything under `templates/` you want re-rendered (template changes only affect
   newly installed projects; your project-owned files are never rewritten —
   re-run `install.sh --force` if you want a fresh seed, your old files are backed up).
@@ -108,9 +108,11 @@ cp .vibe/harness/src/templates/agents.md .vibe/AGENTS.md
 #    (config.env keeps working as-is; refresh comments from
 #     examples/<preset>/config.env if you want them current)
 
-# 4. Link the root entry point (skip if you have a real ./vibe file) and
-#    fix hook paths (sed -i.bak form works on both GNU and macOS sed):
-[ -e vibe ] || { ln -s .vibe/vibe vibe && git add vibe; }
+# 4. Bootstrap the host trust store if this host doesn't have it yet (the
+#    `vibe` shim on PATH is the only host entry point — there is no root
+#    ./vibe symlink; remove one if a previous layout left it), then fix
+#    hook paths (sed -i.bak form works on both GNU and macOS sed):
+bash .vibe/harness/install.sh --self
 sed -i.bak 's|\.devcontainer/harness/scripts|.vibe/harness/src/scripts|g' \
   .claude/settings.json && rm .claude/settings.json.bak
 #    (also update any @.devcontainer/AGENTS.md import in CLAUDE.md/AGENTS.md,
@@ -119,7 +121,7 @@ sed -i.bak 's|\.devcontainer/harness/scripts|.vibe/harness/src/scripts|g' \
 # 5. Retire the devcontainer-CLI-era container, then bring the new engine
 #    up. Down FIRST — vibe down matches the old container's label too, and
 #    skipping it leaves two containers sharing the workspace:
-./vibe down && ./vibe up && ./vibe doctor
+vibe down && vibe up && vibe doctor
 
 # 6. Commit everything together.
 git add -A && git status   # review, then commit
@@ -155,7 +157,7 @@ the project-owned files with the new version.
 3. If the project is on the legacy .devcontainer/ layout, perform the
    migration from docs/updating.md -> "Migrating to the compose engine"
    (git mv to .vibe, devcontainer.json -> compose.yaml, wrapper + hook
-   paths, root ./vibe symlink) — carrying every project customization over.
+   paths) — carrying every project customization over.
 4. Reconcile the project-owned files against the new templates in
    .vibe/harness/src/templates/:
    - compose.yaml: adopt new build args from the template, keeping the
@@ -171,7 +173,7 @@ the project-owned files with the new version.
    mounts, no published ports (loopback-only exceptions need a documented
    reason, like Roblox Studio -> Rojo).
 6. Verify with vibe doctor. If the Dockerfile or compose files changed, a
-   rebuild is required — run ./vibe rebuild on the host; if you are running
+   rebuild is required — run vibe rebuild on the host; if you are running
    inside the container, stage everything and ask the user to rebuild
    instead.
 7. Commit the pin move and the reconciliations together. Report: old -> new

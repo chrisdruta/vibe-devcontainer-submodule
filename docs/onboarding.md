@@ -83,7 +83,7 @@ with the project.
    settings.
 7. Read .vibe/harness/docs/ and apply relevant recipes
    (browser-automation for web projects, roblox, local-models).
-8. Verify: ./vibe up, then vibe doctor, then run the project's
+8. Verify: vibe up, then vibe doctor, then run the project's
    build/test via vibe exec, then vibe rebuild. Fix what fails; constraints are
    explained in .vibe/AGENTS.md (no sudo — OS packages need build args
    plus a rebuild).

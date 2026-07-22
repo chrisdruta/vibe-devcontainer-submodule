@@ -49,7 +49,7 @@ base and re-chains your extension automatically.
            VIBE_BASE_IMAGE: ${VIBE_PROJECT_NAME}-base
    ```
 
-4. `./vibe rebuild`.
+4. `vibe rebuild`.
 
 Worked examples live in [`examples/extensions/`](../examples/extensions/)
 (playwright, blender); `install.sh --extras playwright` performs these steps
