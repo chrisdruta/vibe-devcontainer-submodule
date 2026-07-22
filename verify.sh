@@ -151,14 +151,14 @@ services:
         read_only: true
 YAML
 enf_store="$store_tmp/versions"
-vibe_enforce_compose "$enf_dir/clean.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1 \
+vibe_enforce_compose "$enf_dir/clean.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1 \
   || { echo "FAIL: clean compose rejected by enforcement" >&2; exit 1; }
 for attack in "privileged: true" "cap_add: [SYS_ADMIN]" "network_mode: host"; do
   { printf 'services:\n  dev:\n    user: vscode\n    cap_drop: [ALL]\n'
     printf '    security_opt: [no-new-privileges:true]\n    %s\n' "$attack"
     printf '    volumes:\n      - type: bind\n        source: %s/x\n        target: /workspaces/%s/.vibe/harness\n        read_only: true\n' "$enf_store" "$ws"
   } >"$enf_dir/bad.yaml"
-  if vibe_enforce_compose "$enf_dir/bad.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+  if vibe_enforce_compose "$enf_dir/bad.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
     echo "FAIL: enforcement accepted a boundary-weakening config ($attack)" >&2; exit 1
   fi
 done
@@ -182,7 +182,7 @@ services:
         source: /
         target: /host
 YAML
-if vibe_enforce_compose "$enf_dir/rootbind.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+if vibe_enforce_compose "$enf_dir/rootbind.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
   echo "FAIL: enforcement accepted a sidecar binding the host root" >&2; exit 1
 fi
 cat >"$enf_dir/rwharness.yaml" <<YAML
@@ -197,7 +197,7 @@ services:
         target: /workspaces/$ws/.vibe/harness
         read_only: false
 YAML
-if vibe_enforce_compose "$enf_dir/rwharness.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+if vibe_enforce_compose "$enf_dir/rwharness.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
   echo "FAIL: enforcement accepted a writable harness overmount" >&2; exit 1
 fi
 # A compliant DECOY service must not satisfy the dev requirements for an unsafe
@@ -216,7 +216,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 YAML
-if vibe_enforce_compose "$enf_dir/decoy.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+if vibe_enforce_compose "$enf_dir/decoy.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
   echo "FAIL: enforcement accepted an unsafe dev with a compliant decoy service" >&2; exit 1
 fi
 # RW bind of a store version at a decoy target (would let the container rewrite
@@ -237,9 +237,67 @@ services:
         target: /mnt/decoy
         read_only: false
 YAML
-if vibe_enforce_compose "$enf_dir/rwstore.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+if vibe_enforce_compose "$enf_dir/rwstore.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
   echo "FAIL: enforcement accepted a RW store bind at a decoy target" >&2; exit 1
 fi
+# Nested-key bypass: dev user:root with a decoy labels: map claiming compliance.
+cat >"$enf_dir/nested.yaml" <<YAML
+services:
+  dev:
+    user: root
+    labels:
+      user: vscode
+      cap_drop: ALL
+      no-new-privileges: true
+    volumes:
+      - type: bind
+        source: $enf_store/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: true
+YAML
+if vibe_enforce_compose "$enf_dir/nested.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
+  echo "FAIL: enforcement accepted a nested-key (labels) compliance bypass" >&2; exit 1
+fi
+# A local-driver volume that binds the host root, and env_file, must be refused.
+cat >"$enf_dir/drvol.yaml" <<YAML
+services:
+  dev:
+    user: vscode
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: $enf_store/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: true
+volumes:
+  hostroot:
+    driver: local
+    driver_opts:
+      o: bind
+      device: /
+YAML
+if vibe_enforce_compose "$enf_dir/drvol.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1; then
+  echo "FAIL: enforcement accepted a local-driver bind volume" >&2; exit 1
+fi
+# A legit sidecar with its own (non-vscode) user must NOT be rejected.
+cat >"$enf_dir/sidecar.yaml" <<YAML
+services:
+  dev:
+    user: vscode
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: $enf_store/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: true
+  db:
+    user: postgres
+    image: postgres
+YAML
+vibe_enforce_compose "$enf_dir/sidecar.yaml" "$ws" "/nonexistent-repo" "$enf_store" "$enf_store/x" >/dev/null 2>&1 \
+  || { echo "FAIL: enforcement rejected a legit non-vscode sidecar" >&2; exit 1; }
 # First contact must FAIL CLOSED without a tty (piped stdin here).
 fc_app="$store_tmp/fcapp"; mkdir -p "$fc_app/.vibe"; git -C "$fc_app" init -q
 : >"$fc_app/.vibe/compose.yaml"

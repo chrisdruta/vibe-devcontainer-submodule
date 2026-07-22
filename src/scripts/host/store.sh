@@ -32,6 +32,12 @@
 # behavior. PATH is reset to a known-safe prefix; the launcher re-derives tool
 # paths from there.
 vibe_sanitize_env() {
+  # Reset PATH FIRST — BEFORE running any external command below — so the very
+  # tools this function uses (env, sed) can't be shadowed by a workspace dir
+  # earlier in the inherited PATH (sol H4). System dirs go first; the inherited
+  # tail is kept so host tools like docker (Homebrew/Colima) still resolve.
+  PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${PATH:+:$PATH}"
+  export PATH
   # Git config/hook/filter/credential redirection, alternate rc files, and the
   # tmux binary selector all become code-execution levers under a hostile env.
   unset BASH_ENV ENV SHELLOPTS GLOBIGNORE 2>/dev/null || true
@@ -44,14 +50,6 @@ vibe_sanitize_env() {
   GIT_CONFIG_NOSYSTEM=1
   GIT_TERMINAL_PROMPT=0
   export GIT_CONFIG_NOSYSTEM GIT_TERMINAL_PROMPT
-  # ALWAYS put the system dirs FIRST so the trusted-op tools (git, sed, stat,
-  # awk, sha256sum, tar, …) resolve from there — a workspace-controlled dir
-  # earlier in the inherited PATH must not be able to supply them. The inherited
-  # tail is kept so host tools like docker (Homebrew/Colima paths) still resolve.
-  # (The earlier guard skipped this whenever /usr/bin was already present, i.e.
-  # always — the reset never happened; sol M10.)
-  PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin${PATH:+:$PATH}"
-  export PATH
 }
 
 # ── stat portability (GNU -c first for Linux; BSD -f for macOS) ────────────
@@ -528,66 +526,102 @@ vibe_sha_is_release() {
 #   any path, use_api_socket, ssh/host-secret/host-config binds, security_opt
 #   weakening, userns_mode. Tripping any of these requires --unsafe.
 
-# Copy the referenced-input closure into a host-only snapshot dir. $1=repo_root,
-# $2=snapshot dir (emptied first). Rejects symlinked inputs. Records present/
-# absent so a newly-added Dockerfile counts as drift.
+# Snapshot the compose control inputs AND the whole .vibe directory (the image
+# extension build context) into a host-only dir, so an extension build reads the
+# FROZEN context, not the live workspace, and the daemon's rerender resolves the
+# same bytes that were enforced. The harness submodule is excluded (trusted
+# separately, RO-mounted). Symlinks anywhere under .vibe are refused (a symlink
+# in a build context is a host-file read). Records present/absent of the fixed
+# control files so a newly-added Dockerfile counts as drift. Build contexts that
+# point at ./.vibe are rewritten to the absolute snapshot path (§ below).
+# $1=repo_root, $2=snapshot dir (emptied first).
 vibe_snapshot_compose_inputs() {
   local root="$1" snap="$2"
   rm -rf "$snap" 2>/dev/null || true
   ( umask 077 && mkdir -p "$snap/.vibe" ) || return 1
-  local rel src
-  # The fixed project-owned control files. The referenced-input closure beyond
-  # these (include/extends/env_file/build context) is captured by rendering
-  # under --project-directory below and by copying the whole .vibe tree, minus
-  # the harness submodule (which is trusted separately and RO-mounted).
+  # Copy everything under .vibe except the harness submodule. dotglob picks up
+  # dotfiles (.dockerignore); nullglob makes an empty .vibe expand to nothing.
+  if [ -d "$root/.vibe" ]; then
+    local saved path item
+    saved="$(shopt -p dotglob nullglob 2>/dev/null || true)"
+    shopt -s dotglob nullglob 2>/dev/null || true
+    for path in "$root"/.vibe/*; do
+      item="$(basename -- "$path")"
+      case "$item" in harness) continue ;; esac
+      cp -a "$path" "$snap/.vibe/" 2>/dev/null || { eval "$saved" 2>/dev/null || true; return 1; }
+    done
+    eval "$saved" 2>/dev/null || true
+  fi
+  # No symlinks/special files may hide in the snapshotted context.
+  if find "$snap/.vibe" -type l 2>/dev/null | grep -q .; then
+    printf 'vibe: refusing symlink under .vibe (build-context host-file read)\n' >&2
+    find "$snap/.vibe" -type l 2>/dev/null | sed 's/^/  symlink: /' >&2
+    return 1
+  fi
+  # Present/absent ledger for the fixed control files (drift signal).
+  local rel
   for rel in compose.yaml Dockerfile .dockerignore config.env; do
-    src="$root/.vibe/$rel"
-    if [ -L "$src" ]; then
-      printf 'vibe: refusing symlinked compose input: .vibe/%s\n' "$rel" >&2
-      return 1
-    fi
-    if [ -e "$src" ]; then
-      cp -p "$src" "$snap/.vibe/$rel" 2>/dev/null || return 1
-      printf 'present .vibe/%s\n' "$rel" >>"$snap/.inputs"
-    else
-      printf 'absent .vibe/%s\n' "$rel" >>"$snap/.inputs"
-    fi
+    if [ -e "$snap/.vibe/$rel" ]; then printf 'present .vibe/%s\n' "$rel" >>"$snap/.inputs"
+    else printf 'absent .vibe/%s\n' "$rel" >>"$snap/.inputs"; fi
   done
+  # Freeze the image-extension build context: rewrite a `context:` that points
+  # into .vibe to the absolute snapshot path, so `build` reads the frozen copy
+  # while --project-directory stays the repo root (workspace bind unaffected).
+  # A context that points ELSEWHERE (outside .vibe) can't be frozen here — leave
+  # it for the enforcer's structural check / --unsafe.
+  if [ -f "$snap/.vibe/compose.yaml" ]; then
+    local abs_vibe; abs_vibe="$(cd "$snap/.vibe" && pwd -P)"
+    # sed: `context: ./.vibe` or `context: .vibe` (optionally quoted) -> abs.
+    sed -E "s#(^[[:space:]]*context:[[:space:]]*[\"']?)\.?/?\.vibe([\"']?[[:space:]]*\$)#\\1$abs_vibe\\2#" \
+      "$snap/.vibe/compose.yaml" > "$snap/.vibe/compose.yaml.tmp" 2>/dev/null \
+      && mv "$snap/.vibe/compose.yaml.tmp" "$snap/.vibe/compose.yaml"
+  fi
   return 0
 }
 
-# Render the merged compose config under a SCRUBBED environment — only
-# launcher-minted VIBE_* vars, and NO project .env (so ${...} interpolation
-# can't shift meaning behind an unchanged file hash). Prints the rendered YAML.
-# Args: base_yaml project_compose project_dir project_name ws_base harness_dir
-vibe_render_compose() {
-  local base="$1" proj="$2" pdir="$3" pname="$4" ws="$5" hdir="$6"
+# The ONE compose invocation path — used for BOTH the enforcement render and the
+# daemon (up/build/config). Runs under `env -i` scrubbed to an ALLOWLIST: only
+# the launcher-minted VIBE_* vars, PATH/HOME, and the host's docker-client vars
+# (DOCKER_HOST/CONTEXT/CONFIG/TLS_VERIFY/CERT_PATH, passed through only if set so
+# rootless/remote docker keeps working). No project .env (`--env-file /dev/null`)
+# and no other host var can interpolate into project compose (sol H4). Because
+# the render and the daemon use this SAME env and the SAME frozen -f files, the
+# model that runs is byte-identical to the one enforced.
+# Args: base proj pdir pname ws hdir -- <compose args...>
+vibe_compose_exec() {
+  local base="$1" proj="$2" pdir="$3" pname="$4" ws="$5" hdir="$6"; shift 6
+  # remaining "$@" = the compose subcommand + its args (e.g. `config`, `up -d`).
   local compose_bin
   if docker compose version >/dev/null 2>&1; then compose_bin="docker compose"
   elif command -v docker-compose >/dev/null 2>&1; then compose_bin="docker-compose"
   else printf 'vibe: docker compose not found\n' >&2; return 1; fi
-  # Runs in the launcher's already-sanitized process environment (GIT_*/BASH_ENV
-  # stripped at entry). --env-file /dev/null disables compose's implicit project
-  # .env, so a container-writable .env cannot shift ${...} interpolation behind
-  # the gate. The DAEMON path (the launcher's compose()) sets the IDENTICAL
-  # VIBE_* vars and the same --env-file in the SAME process, so the model
-  # compose renders at up-time is byte-identical to what is enforced here — while
-  # the host's DOCKER_HOST/DOCKER_CONTEXT/etc. are preserved (env -i would break
-  # rootless/remote docker). $compose_bin is deliberately word-split.
+  # Docker-client vars, passed through only when set (bash 3.2: eval-indirect;
+  # these values are not expected to contain spaces).
+  local docker_env="" dv val
+  for dv in DOCKER_HOST DOCKER_CONTEXT DOCKER_CONFIG DOCKER_TLS_VERIFY DOCKER_CERT_PATH; do
+    eval "val=\${$dv:-}"
+    [ -n "$val" ] && docker_env="$docker_env $dv=$val"
+  done
   # shellcheck disable=SC2086
-  VIBE_PROJECT_NAME="$pname" \
-  VIBE_WORKSPACE_BASENAME="$ws" \
-  VIBE_REPO_ROOT="$pdir" \
-  VIBE_USER_UID="$(id -u)" \
-  VIBE_HARNESS_DIR="$hdir" \
-  VIBE_HARNESS_SRC="$hdir/src" \
+  env -i \
+    $docker_env \
+    PATH="$PATH" HOME="$HOME" \
+    VIBE_PROJECT_NAME="$pname" VIBE_WORKSPACE_BASENAME="$ws" \
+    VIBE_REPO_ROOT="$pdir" VIBE_USER_UID="$(id -u)" \
+    VIBE_HARNESS_DIR="$hdir" VIBE_HARNESS_SRC="$hdir/src" \
     $compose_bin \
       --project-name "$pname" \
       --project-directory "$pdir" \
       --env-file /dev/null \
       -f "$base" \
       -f "$proj" \
-      config 2>/dev/null
+      "$@"
+}
+
+# Enforcement render: the merged, scrubbed compose config as YAML.
+# Args: base_yaml project_compose project_dir project_name ws_base harness_dir
+vibe_render_compose() {
+  vibe_compose_exec "$1" "$2" "$3" "$4" "$5" "$6" config 2>/dev/null
 }
 
 # Emit "source|target|readonly" for each bind volume in a compose model or
@@ -628,31 +662,39 @@ vibe_service_names() {
   '
 }
 
+# Emit the DIRECT child lines (one indent level in) of a service block on stdin.
+# compose v2 `config` output uses 2-space steps: service keys sit at 4 spaces,
+# their nested maps/sequences at 6+. Emitting only the 4-space lines means a
+# `user:` planted under a nested `labels:` map (6 spaces) is NOT mistaken for the
+# real service user (sol nested-key bypass). Sequence VALUES of a direct key are
+# also emitted (so `cap_drop:`/`security_opt:` items are seen), tagged by their
+# owning key via a leading marker.
+vibe_dev_direct() {
+  awk '
+    /^    [A-Za-z_]/ { line=$0; sub(/^    /,"",line); key=line; sub(/:.*/,"",key); print "K " line; cur=key; next }
+    /^      / && cur != "" { line=$0; sub(/^      */,"",line); print "V " cur " " line; next }
+    /^    [^ ]/ { cur="" }
+  '
+}
+
 # Structural enforcement on a rendered compose model. Returns 0 if every
-# invariant holds, 2 on any violation (the caller refuses, or proceeds under
-# --unsafe). Parses compose's own normalized output; FAILS CLOSED. Two classes
-# of check: (a) forbidden-on-ANY-service escape vectors (a decoy service can't
-# help — presence anywhere is rejected); (b) required-on-`dev` guarantees,
-# extracted from the dev block so a compliant decoy service can't satisfy them
-# for an unsafe dev (sol). Args: rendered ws_base repo_canonical store_versions_dir
+# invariant holds, 2 on any violation (caller refuses, or proceeds under
+# --unsafe). Whitelisted-surface posture: the DEFAULT seeded config passes;
+# compose features that cannot be safely text-validated (alternate mount/secret
+# surfaces, live referenced inputs) are refused so the enforced model is the run
+# model. FAILS CLOSED. Args: rendered ws_base repo_canonical store_versions_dir harness_dir
 vibe_enforce_compose() {
-  local rendered="$1" ws_base="$2" repo_canon="${3:-}" store_versions="${4:-}"
+  local rendered="$1" ws_base="$2" repo_canon="${3:-}" store_versions="${4:-}" hdir="${5:-}"
   local store_home=""
   [ -n "$store_versions" ] && store_home="${store_versions%/versions}"
-  local violations="" model dev
+  local violations="" model dev devd
   model="$(cat "$rendered")"
   dev="$(printf '%s\n' "$model" | vibe_service_block dev)"
+  devd="$(printf '%s\n' "$dev" | vibe_dev_direct)"
 
   # ── (a) escape vectors forbidden on ANY service (whole-model) ────────────
-  # privileged: true (presence of `privileged: false` is fine).
-  if printf '%s\n' "$model" | grep -Eq '^[[:space:]]*privileged:[[:space:]]*true[[:space:]]*$'; then
-    violations="$violations privileged"
-  fi
-  # userns_mode other than the default (empty/host-disabled is not our concern;
-  # any explicit value is suspicious under the boundary).
-  if printf '%s\n' "$model" | grep -Eq '^[[:space:]]*userns_mode:[[:space:]]*[^[:space:]]'; then
-    violations="$violations userns_mode"
-  fi
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*privileged:[[:space:]]*true[[:space:]]*$' && violations="$violations privileged"
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*userns_mode:[[:space:]]*[^[:space:]]' && violations="$violations userns_mode"
   local key
   for key in cap_add devices; do
     if printf '%s\n' "$model" | grep -Eq "^[[:space:]]*${key}:[[:space:]]*\[[^]]*[^][:space:]][^]]*\]" \
@@ -664,67 +706,63 @@ vibe_enforce_compose() {
       violations="$violations $key"
     fi
   done
-  # Host namespaces.
   for key in pid ipc uts cgroup network_mode; do
-    if printf '%s\n' "$model" | grep -Eq "^[[:space:]]*${key}:[[:space:]]*[\"']?host[\"']?[[:space:]]*$"; then
-      violations="$violations ${key}=host"
-    fi
+    printf '%s\n' "$model" | grep -Eq "^[[:space:]]*${key}:[[:space:]]*[\"']?host[\"']?[[:space:]]*$" && violations="$violations ${key}=host"
   done
-  # Docker API surfaces + agent/secret forwarding.
   printf '%s\n' "$model" | grep -Eq 'docker\.sock' && violations="$violations docker.sock"
   printf '%s\n' "$model" | grep -Eq '^[[:space:]]*use_api_socket:[[:space:]]*true' && violations="$violations use_api_socket"
   printf '%s\n' "$model" | grep -Eq 'SSH_AUTH_SOCK|ssh-agent' && violations="$violations ssh-agent"
-  # Permissive security_opt (any service) — unconfined seccomp/apparmor, disabled labels.
   printf '%s\n' "$model" | grep -Eiq 'seccomp[=:][[:space:]]*unconfined|apparmor[=:][[:space:]]*unconfined|label[=:][[:space:]]*disable' \
     && violations="$violations security_opt-unconfined"
 
-  # ── (b) guarantees REQUIRED on the dev service (scoped to its block) ─────
+  # ── surfaces that bypass the bind gate or read live host inputs — refused ─
+  # A `local` driver volume with `o: bind`/`device:` is a host bind wearing a
+  # named-volume costume; configs/secrets `file:` read arbitrary host files;
+  # include/extends/env_file are read live at up-time (not frozen). None appear
+  # in the seeded configs — a project that needs them opts into --unsafe.
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*driver_opts:' && violations="$violations volume-driver_opts"
+  printf '%s\n' "$model" | grep -Eq '^(configs|secrets):[[:space:]]*$' && violations="$violations configs-or-secrets"
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*(include|extends):' && violations="$violations include-or-extends"
+  printf '%s\n' "$model" | grep -Eq '^[[:space:]]*env_file:' && violations="$violations env_file"
+
+  # ── (b) guarantees REQUIRED on the dev service — DIRECT children only ─────
   if [ -z "$dev" ]; then
     violations="$violations no-dev-service"
   else
-    # Exactly vscode (end-anchored: `vscodeevil` must not pass).
-    if ! printf '%s\n' "$dev" | grep -Eq "^[[:space:]]*user:[[:space:]]*[\"']?vscode[\"']?[[:space:]]*$"; then
+    # user: a direct dev key, exactly vscode.
+    if ! printf '%s\n' "$devd" | grep -Eq "^K user:[[:space:]]*[\"']?vscode[\"']?[[:space:]]*$"; then
       violations="$violations user-not-vscode"
     fi
-    # cap_drop must include ALL, within the dev block — inline (`cap_drop: [ALL]`)
-    # or block-style (`cap_drop:` then `- ALL`).
-    if ! printf '%s\n' "$dev" | awk '
-        /^[[:space:]]*cap_drop:/ { f=1; if ($0 ~ /ALL/) e=1; next }
-        f && /ALL/ { e=1 }
-        f && /^[[:space:]]*[a-zA-Z_]+:/ { f=0 }
-        END { exit !e }'; then
+    # cap_drop: ALL — direct key, inline or as a direct sequence value.
+    if ! printf '%s\n' "$devd" | grep -Eq "^K cap_drop:.*ALL|^V cap_drop .*ALL"; then
       violations="$violations cap_drop-not-ALL"
     fi
-    # no-new-privileges:true in the dev block's security_opt.
-    if ! printf '%s\n' "$dev" | grep -Eq 'no-new-privileges:[[:space:]]*[\"'\'']?true'; then
+    # no-new-privileges:true — a direct security_opt value (or inline).
+    if ! printf '%s\n' "$devd" | grep -Eq "^K security_opt:.*no-new-privileges:[[:space:]]*[\"']?true|^V security_opt .*no-new-privileges:[[:space:]]*[\"']?true"; then
       violations="$violations missing-no-new-privileges"
     fi
   fi
 
   # ── bind mounts (all services): store binds + host-path binds ────────────
   local harness_target="/workspaces/$ws_base/.vibe/harness"
-  local saw_overmount=0 b_src b_tgt b_ro
+  local overmounts=0 b_src b_tgt b_ro
   while IFS='|' read -r b_src b_tgt b_ro; do
     [ -n "$b_src$b_tgt" ] || continue
-    # Any bind whose SOURCE is inside the store is only ever legitimate as the
-    # one harness overmount: exact target, read-only, source under versions/.
-    # (Prevents mounting the trusted tree or its manifest RW, or at a decoy
-    # target — the container→verified-host-code escape, sol C1.)
     if [ -n "$store_home" ]; then
       case "$b_src" in
         "$store_home" | "$store_home"/*)
-          if [ "$b_tgt" = "$harness_target" ] && [ "$b_ro" = "true" ]; then
-            case "$b_src" in "$store_versions"/*) ;; *) violations="$violations store-bind-bad-source" ;; esac
+          # The ONLY legitimate store bind: the exact current version dir,
+          # read-only, at the exact harness target (sol M5 — exact + single).
+          if [ "$b_tgt" = "$harness_target" ] && [ "$b_ro" = "true" ] && [ -n "$hdir" ] && [ "$b_src" = "$hdir" ]; then
+            overmounts=$((overmounts + 1))
           else
             violations="$violations store-bind:$b_tgt"
           fi
-          [ "$b_tgt" = "$harness_target" ] && saw_overmount=1
           continue
           ;;
       esac
     fi
     if [ "$b_tgt" = "$harness_target" ]; then
-      # Claims the harness target but NOT from the store — reject.
       violations="$violations harness-overmount-foreign-source"
       continue
     fi
@@ -739,7 +777,7 @@ vibe_enforce_compose() {
   done <<EOF
 $(printf '%s\n' "$model" | vibe_compose_binds)
 EOF
-  [ "$saw_overmount" = 1 ] || violations="$violations missing-harness-overmount"
+  [ "$overmounts" = 1 ] || violations="$violations harness-overmount-count=$overmounts"
 
   if [ -n "$violations" ]; then
     printf 'COMPOSE INVARIANT VIOLATIONS:%s\n' "$violations" >&2
@@ -795,7 +833,7 @@ vibe_compose_gate() {
   # Structural enforcement on the rendered model.
   local root_canon; root_canon="$(cd -- "$root" && pwd -P)"
   local enforce_rc=0
-  vibe_enforce_compose "$rendered" "$ws" "$root_canon" "$home/versions" || enforce_rc=$?
+  vibe_enforce_compose "$rendered" "$ws" "$root_canon" "$home/versions" "$hdir" || enforce_rc=$?
   if [ "$enforce_rc" = "2" ]; then
     if [ "$unsafe" = "--unsafe" ]; then
       printf '\n*** --unsafe: the container boundary is DISABLED for this command. ***\n' >&2

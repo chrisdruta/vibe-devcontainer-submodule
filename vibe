@@ -347,26 +347,15 @@ ensure_compose_gate() {
   compose_gated=1
 }
 
-# Every daemon invocation sets the SAME VIBE_* vars and the SAME --env-file
-# /dev/null and feeds the SAME frozen snapshot files the gate enforced, all in
-# this one already-sanitized process — so the model compose renders here is
-# byte-identical to the one that passed enforcement; a container-writable .env
-# cannot shift it between check and run (sol C3). The host's docker client env
-# (DOCKER_HOST/CONTEXT/…) is preserved. The unique snapshot dir is cleaned on exit.
+# The daemon path goes through the SAME vibe_compose_exec store.sh helper the
+# enforcement render uses — identical env -i allowlist, --env-file /dev/null, and
+# the SAME frozen snapshot files — so what runs is byte-identical to what was
+# enforced (sol C3/H4). The unique snapshot dir is cleaned on launcher exit.
 compose() {
   ensure_compose_gate
-  VIBE_PROJECT_NAME="$project_name" \
-  VIBE_WORKSPACE_BASENAME="$ws_base" \
-  VIBE_REPO_ROOT="$repo_root" \
-  VIBE_USER_UID="$(id -u)" \
-  VIBE_HARNESS_DIR="$self_dir" \
-  VIBE_HARNESS_SRC="$self_dir/src" \
-  "${compose_bin[@]}" \
-    --project-name "$project_name" \
-    --project-directory "$repo_root" \
-    --env-file /dev/null \
-    -f "$self_dir/src/compose/base.yaml" \
-    -f "$VIBE_SNAPSHOT_COMPOSE" \
+  vibe_compose_exec \
+    "$self_dir/src/compose/base.yaml" "$VIBE_SNAPSHOT_COMPOSE" \
+    "$repo_root" "$project_name" "$ws_base" "$self_dir" \
     "$@"
 }
 # Clean the per-invocation snapshot dir when the launcher exits.

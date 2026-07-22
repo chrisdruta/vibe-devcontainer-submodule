@@ -111,13 +111,16 @@ sh_verify_exec() {
      find "$dest" ! -type f ! -type d 2>/dev/null | grep -q .; then
     return 1
   fi
-  # Every manifest entry must match (hash + mode).
+  # Every manifest entry must match (hash AND mode).
+  local fmode
   while IFS=' ' read -r hash mode rel; do
     [ -n "$rel" ] || continue
     f="$dest/$rel"
     [ -f "$f" ] && [ ! -L "$f" ] || return 1
     want="$(sh_sha256_file "$f")"
     [ "$want" = "$hash" ] || return 1
+    fmode="$(stat -c '%a' "$f" 2>/dev/null || stat -f '%Lp' "$f" 2>/dev/null || echo '?')"
+    [ "$fmode" = "$mode" ] || return 1
     count=$((count + 1))
   done <"$manifest"
   # And there must be no EXTRA files beyond the manifest.
