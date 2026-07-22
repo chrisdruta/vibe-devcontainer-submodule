@@ -43,4 +43,7 @@ jobs:
             commit -q --allow-empty -m init
           ./install.sh --preset minimal --url "$PWD" "$target"
           cd "$target"
-          ./vibe build
+          # install.sh --self bootstrapped ~/.vibe (store + shim) and recorded
+          # trust for the target; there is no root ./vibe anymore — the shim
+          # is the host entry point, exactly as on a real host.
+          "$HOME/.vibe/bin/vibe" build
