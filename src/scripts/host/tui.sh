@@ -12,8 +12,8 @@
 set -euo pipefail
 
 if [ "$#" -lt 4 ]; then
-  echo "Usage: tui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME [--kill|--fresh]" >&2
-  echo "(normally invoked via: vibe tui [--kill|--fresh])" >&2
+  echo "Usage: tui.sh REPO_ROOT WS_BASE HARNESS_DIR PROJECT_NAME [--kill|--fresh|--detach]" >&2
+  echo "(normally invoked via: vibe tui [--kill|--fresh|--detach])" >&2
   exit 2
 fi
 repo_root="$1"
@@ -25,8 +25,9 @@ case "${5:-}" in
   '') ;;
   --kill) action="kill" ;;
   --fresh) action="fresh" ;;
+  --detach) action="detach" ;;
   *)
-    echo "vibe tui: unknown flag: $5 (known: --kill, --fresh)" >&2
+    echo "vibe tui: unknown flag: $5 (known: --kill, --fresh, --detach)" >&2
     exit 2
     ;;
 esac
@@ -48,7 +49,7 @@ fi
 # a different server and are untouched. Runs BEFORE the $TMUX guard: it's
 # an admin op that must work from anywhere (from inside the tui itself it
 # is prefix+Q with more typing — the client just dies with the server).
-if [ "$action" != "launch" ]; then
+if [ "$action" = "kill" ] || [ "$action" = "fresh" ]; then
   kill_out="$("$tmux_bin" -L "$socket" kill-server 2>&1)" || true
   case "$kill_out" in
     *"no server"* | *"error connecting"*)
@@ -70,7 +71,10 @@ if [ "$action" != "launch" ]; then
   [ "$action" = "kill" ] && exit 0
 fi
 
-if [ -n "${TMUX:-}" ]; then
+# --detach never attaches, so running it from inside a tmux (including a
+# host pane of the tui itself — the prime use case: put a project on the
+# sidebar without opening a new terminal) is fine.
+if [ -n "${TMUX:-}" ] && [ "$action" != "detach" ]; then
   echo "vibe tui hosts its own tmux — run it from a plain terminal." >&2
   echo "(already on the vibe socket? switch with: tmux -L vibe switch-client -t <session>)" >&2
   exit 1
@@ -219,6 +223,15 @@ elif ! cmp -s "$owner_conf" "$conf"; then
   echo "prefix+R keeps reloading the owner's. To hand ownership to this project:" >&2
   echo "  tmux -L $socket kill-server   (container agents keep running), then relaunch." >&2
   sleep 3
+fi
+
+# --detach: the session is built (or healed) on the server — stop short
+# of attaching. From an open tui it shows up in the sidebar/prefix+o
+# within a poll tick; a later plain `vibe tui` here attaches to it.
+if [ "$action" = "detach" ]; then
+  echo "vibe tui: session '$session' ready on the vibe socket (not attached)."
+  echo "Pick it up in an open tui via the sidebar or prefix+o; attach directly with: vibe tui"
+  exit 0
 fi
 
 exec "$tmux_bin" -L "$socket" -f "$conf" attach-session -t "$session"

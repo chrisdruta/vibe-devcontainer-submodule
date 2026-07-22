@@ -104,7 +104,10 @@ Commands:
               prefix+Space (needs tmux >= 3.4 on the host; pinned 3.7b
               build: src/scripts/host/install-tmux.sh)
               (--kill: stop the UI server — all projects' tui sessions,
-               container agents unaffected; --fresh: --kill, then relaunch)
+               container agents unaffected; --fresh: --kill, then relaunch;
+               --detach: build/heal this project's session WITHOUT
+               attaching — put it on a running tui's sidebar from any
+               shell, including a host pane of the tui itself)
   show        Preview an image in the terminal (default: newest vibe clip capture)
               (--diag PATH: report format/renderer/error instead of drawing)
   review [DIR]  Read-only browse/review with yazi (file ops & shell are

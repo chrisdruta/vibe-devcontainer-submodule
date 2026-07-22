@@ -170,7 +170,10 @@ Tabs are clickable (mouse is on), and the `+` at the right end of the status
 bar opens a new host window. The left sidebar lists every project on the
 socket — state dots, bold name, git branch — and clicking a project
 switches to it; the `windows:` label in the status bar marks the tab list
-of the current project. The config lives at `src/config/tmux-tui.conf`
+of the current project. To add another project to the sidebar without
+opening a new terminal, run `./vibe tui --detach` in that project's
+checkout (any shell works, including a host pane of the tui) — the session
+is built on the shared server but nothing attaches to it. The config lives at `src/config/tmux-tui.conf`
 on its own socket — your personal `~/.tmux.conf` and default tmux server are
 never touched.
 
