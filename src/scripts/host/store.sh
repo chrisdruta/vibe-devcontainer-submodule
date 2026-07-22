@@ -577,11 +577,19 @@ vibe_enforce_compose() {
   local key
   for key in privileged cap_add devices userns_mode; do
     if printf '%s\n' "$model" | grep -Eq "^[[:space:]]*${key}:" ; then
-      # cap_add: [] renders empty — only flag non-empty.
       case "$key" in
-        cap_add)
-          printf '%s\n' "$model" | awk '/^[[:space:]]*cap_add:/{f=1;next} f&&/^[[:space:]]*-/{print;e=1} f&&/^[[:space:]]*[a-z_]+:/{f=0} END{exit !e}' >/dev/null \
-            && violations="$violations cap_add" ;;
+        cap_add|devices)
+          # Empty renders as `key: []` or `key:` with no items — only flag a
+          # NON-empty list, whether block-style (`- CAP`) or inline (`[CAP]`).
+          if printf '%s\n' "$model" | grep -Eq "^[[:space:]]*${key}:[[:space:]]*\[[^]]*[^][:space:]][^]]*\]" \
+             || printf '%s\n' "$model" | awk -v k="$key" '
+                  $0 ~ "^[[:space:]]*"k":"{f=1;next}
+                  f&&/^[[:space:]]*-/{e=1}
+                  f&&/^[[:space:]]*[a-zA-Z_]+:/{f=0}
+                  END{exit !e}'; then
+            violations="$violations $key"
+          fi
+          ;;
         *) violations="$violations $key" ;;
       esac
     fi

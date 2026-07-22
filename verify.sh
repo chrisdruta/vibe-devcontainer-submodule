@@ -19,6 +19,7 @@ shell_files=(
   "$repo_root/verify.sh"
   "$repo_root/vibe"
   "$repo_root/src/templates/vibe"
+  "$repo_root/src/templates/shim"
   "$repo_root/src/config/theme.sh"
 )
 while IFS= read -r -d '' file; do
@@ -40,8 +41,10 @@ fi
 # EVERY script that can run on the host belongs here — the src/scripts/host/
 # tree in full, plus the launcher chain and the libs they source.
 host_side_files=(
-  install.sh verify.sh vibe src/templates/vibe
+  install.sh verify.sh vibe src/templates/vibe src/templates/shim
   src/scripts/update.sh src/scripts/repo-root.sh
+  src/scripts/host/store.sh src/scripts/host/self-install.sh
+  src/scripts/host/dev-mode.sh
   src/scripts/host/tui.sh src/scripts/host/sidebar.sh
   src/scripts/host/dock.sh src/scripts/host/state-render.sh
   src/scripts/host/clip-image.sh src/scripts/host/clip-to-pane.sh
@@ -78,55 +81,84 @@ esac
   || { echo "FAIL: vibe_checkout_suffix identical for different paths" >&2; exit 1; }
 echo "Project-identity helper checks passed."
 
-# Identity resolution end-to-end through the real launcher, docker stubbed
-# (branch coverage for .project-id: seed, respect, reseed-on-corrupt,
-# legacy adoption, daemon-down non-persistence). Runs anywhere bash runs.
-id_tmp="$(mktemp -d)"
-mkdir -p "$id_tmp/bin" "$id_tmp/app/.vibe"
-cat >"$id_tmp/bin/docker" <<'SHIM'
-#!/usr/bin/env bash
-# verify.sh stub: `compose ...` succeeds silently; `ps` obeys FAKE_* envs.
-case "${1:-}" in
-  ps)
-    [ -n "${FAKE_DAEMON_DOWN:-}" ] && { echo "daemon down" >&2; exit 1; }
-    printf '%s' "${FAKE_LEGACY_IDS:-}"
-    ;;
-esac
-exit 0
-SHIM
-chmod +x "$id_tmp/bin/docker"
-: >"$id_tmp/app/.vibe/compose.yaml"
-git -C "$id_tmp/app" init -q
-id_vibe() (
-  cd "$id_tmp/app" \
-    && PATH="$id_tmp/bin:$PATH" VIBE_SKIP_CONTAINER_DISPATCH=1 \
-       bash "$repo_root/vibe" config >/dev/null 2>&1
-)
-id_file="$id_tmp/app/.vibe/.project-id"
-want_fresh="vibe-app-$(vibe_checkout_suffix "$id_tmp/app")"
+# Host root-of-trust store lifecycle — pure bash + git, no docker/daemon. Runs
+# under a SCRATCH store ($HOME must own it, so put it under $HOME). Covers:
+# store validation, materialize (fetch/fsck/archive/manifest/freeze/atomic),
+# manifest tamper detection, symlink-tree rejection, records, and the
+# structural compose enforcement across a clean config + several attack shapes.
+store_tmp="$HOME/.vibe-verify.$$"
+export VIBE_HOME="$store_tmp"
+export VIBE_ALLOW_INSECURE_HOME=1
+rm -rf "$store_tmp"
+# shellcheck source=src/scripts/host/store.sh
+. "$repo_root/src/scripts/host/store.sh"
 
-id_vibe
-[ "$(cat "$id_file")" = "$want_fresh" ] \
-  || { echo "FAIL: fresh checkout id: got '$(cat "$id_file")', want '$want_fresh'" >&2; exit 1; }
-grep -qxF '.vibe/.project-id' "$id_tmp/app/.git/info/exclude" \
-  || { echo "FAIL: .project-id not in .git/info/exclude" >&2; exit 1; }
-id_vibe
-[ "$(cat "$id_file")" = "$want_fresh" ] \
-  || { echo "FAIL: id not stable across runs" >&2; exit 1; }
-printf 'NOT A VALID name!\n' >"$id_file"
-id_vibe
-[ "$(cat "$id_file")" = "$want_fresh" ] \
-  || { echo "FAIL: corrupt id not reseeded" >&2; exit 1; }
-rm -f "$id_file"
-FAKE_LEGACY_IDS="abc123" id_vibe
-[ "$(cat "$id_file")" = "vibe-app" ] \
-  || { echo "FAIL: legacy adoption: got '$(cat "$id_file")', want 'vibe-app'" >&2; exit 1; }
-rm -f "$id_file"
-FAKE_DAEMON_DOWN=1 id_vibe || true
-[ ! -e "$id_file" ] \
-  || { echo "FAIL: id persisted while the daemon was unreachable" >&2; exit 1; }
-rm -rf "$id_tmp"
-echo "Project-identity resolution checks passed."
+vibe_store_init >/dev/null || { echo "FAIL: store init" >&2; exit 1; }
+st_sha="$(git -C "$repo_root" rev-parse HEAD)"
+st_dest="$(vibe_materialize "$st_sha" "$repo_root/.git" 2>/dev/null)" \
+  || { echo "FAIL: materialize" >&2; exit 1; }
+vibe_verify_version "$st_sha" >/dev/null 2>&1 \
+  || { echo "FAIL: fresh materialize does not verify" >&2; exit 1; }
+vibe_verify_exec_paths "$st_dest" >/dev/null 2>&1 \
+  || { echo "FAIL: exec-path verification" >&2; exit 1; }
+# Tamper → verify must fail.
+chmod u+w "$st_dest/vibe"; printf 'x' >>"$st_dest/vibe"
+if vibe_verify_version "$st_sha" >/dev/null 2>&1; then
+  echo "FAIL: tampered version still verifies" >&2; exit 1
+fi
+# Symlink in a source tree → materialize must refuse.
+sl_repo="$store_tmp/slrepo"; mkdir -p "$sl_repo"; git -C "$sl_repo" init -q
+ln -s /etc/passwd "$sl_repo/evil"; echo hi >"$sl_repo/ok"
+git -C "$sl_repo" -c user.email=t@t -c user.name=t add -A
+git -C "$sl_repo" -c user.email=t@t -c user.name=t commit -qm x
+sl_sha="$(git -C "$sl_repo" rev-parse HEAD)"
+if vibe_materialize "$sl_sha" "$sl_repo/.git" >/dev/null 2>&1; then
+  echo "FAIL: materialize accepted a tree containing a symlink" >&2; exit 1
+fi
+# Records: write + typed read, no eval.
+st_rec="$store_tmp/state/projects/testrec"
+vibe_record_write "$st_rec" "sha=$st_sha" "project_name=vibe-x-abc12345" "mode=normal"
+[ "$(vibe_record_get "$st_rec" sha)" = "$st_sha" ] \
+  || { echo "FAIL: record sha read" >&2; exit 1; }
+[ "$(vibe_record_get "$st_rec" project_name)" = "vibe-x-abc12345" ] \
+  || { echo "FAIL: record name read" >&2; exit 1; }
+# Structural compose enforcement: clean passes, attacks are rejected.
+enf_dir="$store_tmp/enf"; mkdir -p "$enf_dir"
+ws=verifyws
+cat >"$enf_dir/clean.yaml" <<YAML
+services:
+  dev:
+    user: vscode
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: $store_tmp/versions/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: true
+YAML
+vibe_enforce_compose "$enf_dir/clean.yaml" "$ws" >/dev/null 2>&1 \
+  || { echo "FAIL: clean compose rejected by enforcement" >&2; exit 1; }
+for attack in "privileged: true" "cap_add: [SYS_ADMIN]" "network_mode: host"; do
+  { printf 'services:\n  dev:\n    user: vscode\n    cap_drop: [ALL]\n'
+    printf '    security_opt: [no-new-privileges:true]\n    %s\n' "$attack"
+    printf '    volumes:\n      - type: bind\n        source: /s\n        target: /workspaces/%s/.vibe/harness\n        read_only: true\n' "$ws"
+  } >"$enf_dir/bad.yaml"
+  if vibe_enforce_compose "$enf_dir/bad.yaml" "$ws" >/dev/null 2>&1; then
+    echo "FAIL: enforcement accepted a boundary-weakening config ($attack)" >&2; exit 1
+  fi
+done
+# First contact must FAIL CLOSED without a tty (piped stdin here).
+fc_app="$store_tmp/fcapp"; mkdir -p "$fc_app/.vibe"; git -C "$fc_app" init -q
+: >"$fc_app/.vibe/compose.yaml"
+git -C "$fc_app" update-index --add --cacheinfo "160000,$st_sha,.vibe/harness" 2>/dev/null || true
+if vibe_first_contact "$fc_app" "$st_dest" "$(basename "$fc_app")" "vibe-fc" </dev/null >/dev/null 2>&1; then
+  echo "FAIL: first_contact did not fail closed on a non-tty" >&2; exit 1
+fi
+chmod -R u+w "$store_tmp" 2>/dev/null || true
+rm -rf "$store_tmp"
+unset VIBE_HOME VIBE_ALLOW_INSECURE_HOME
+echo "Host root-of-trust store checks passed."
 
 # 2. Install each preset into a scratch git repo and validate the result.
 # Submodule add clones this repository's HEAD, so uncommitted changes are invisible.
@@ -143,7 +175,7 @@ for preset in minimal python bun roblox; do
   git -C "$target" init -q -b main
   git -C "$target" -c user.name=verify -c user.email=verify@localhost \
     commit -q --allow-empty -m init
-  "$repo_root/install.sh" --preset "$preset" --url "$repo_root" "$target" >/dev/null
+  "$repo_root/install.sh" --preset "$preset" --url "$repo_root" "$target" --no-self >/dev/null
 
   [[ -x "$target/.vibe/vibe" ]]
   [[ -f "$target/.vibe/compose.yaml" ]]
@@ -151,7 +183,7 @@ for preset in minimal python bun roblox; do
   [[ -f "$target/.vibe/AGENTS.md" ]]
   [[ -f "$target/.vibe/yazi/yazi.toml" ]]
   [[ -f "$target/.vibe/yazi/keymap.toml" ]]
-  [[ -L "$target/vibe" ]]
+  [[ ! -e "$target/vibe" ]]   # host root ./vibe symlink is intentionally gone
   [[ -f "$target/.claude/settings.json" ]]
   [[ -f "$target/.vibe/harness/src/Dockerfile" ]]
   [[ -f "$target/.vibe/harness/src/compose/base.yaml" ]]
@@ -217,13 +249,14 @@ grep -q 'INSTALL_CODEX: "false"' "$tmp/minimal-project/.vibe/compose.yaml"
 grep -q 'INSTALL_GROK: "false"' "$tmp/minimal-project/.vibe/compose.yaml"
 
 # --force reinstall over an existing setup must back up and succeed, and must
-# never touch an existing .claude/settings.json or the root vibe symlink.
+# never touch an existing .claude/settings.json. The host root ./vibe symlink
+# is intentionally not created (host root-of-trust — host uses `vibe` on PATH).
 echo '{"comment": "user-edited"}' >"$tmp/minimal-project/.claude/settings.json"
-"$repo_root/install.sh" --preset minimal --url "$repo_root" --force "$tmp/minimal-project" >/dev/null
+"$repo_root/install.sh" --preset minimal --url "$repo_root" --force "$tmp/minimal-project" --no-self >/dev/null
 [[ -f "$tmp/minimal-project/.vibe/harness/src/Dockerfile" ]]
 compgen -G "$tmp/minimal-project/.vibe.backup.*" >/dev/null
 grep -q 'user-edited' "$tmp/minimal-project/.claude/settings.json"
-[[ -L "$tmp/minimal-project/vibe" ]]
+[[ ! -e "$tmp/minimal-project/vibe" ]]
 
 # Submodule-first (self-install) flow: the user adds the submodule, then runs
 # the installer from inside it — target implied, no re-clone. --extras must
@@ -236,9 +269,9 @@ git -C "$target" -c user.name=verify -c user.email=verify@localhost \
   commit -q --allow-empty -m init
 git -C "$target" -c protocol.file.allow=always \
   submodule add --quiet -- "$repo_root" .vibe/harness
-"$target/.vibe/harness/install.sh" --preset minimal --extras codex,playwright >/dev/null
+"$target/.vibe/harness/install.sh" --preset minimal --extras codex,playwright --no-self >/dev/null
 [[ -f "$target/.vibe/compose.yaml" ]]
-[[ -L "$target/vibe" ]]
+[[ ! -e "$target/vibe" ]]
 # playwright is an image extension now: Dockerfile + dockerignore seeded
 # (matching the templates), dev build block appended, node implied.
 diff -q "$repo_root/src/templates/extensions/playwright/Dockerfile" "$target/.vibe/Dockerfile" >/dev/null
