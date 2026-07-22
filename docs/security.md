@@ -78,6 +78,14 @@ How it works:
 - **Same-basename checkouts still share the agent-state volume**
   (`agent-state-<basename>`) despite distinct host trust records — documented
   ABI, not isolation.
+- **Image-extension build context.** The default image builds from the trusted
+  store `src`, but a project image extension (`.vibe/Dockerfile`, opt-in) builds
+  from the live `./.vibe` context. The `Dockerfile` itself is hash-gated (a
+  changed `COPY` target is drift you review), but its context files are read
+  live at build time — a narrow TOCTOU on extension projects only. Freezing the
+  full referenced-input closure (build context, `env_file`, `include`) into the
+  host snapshot is the top post-1.0 hardening; until then, do not point an
+  image-extension project at untrusted code.
 - SHA-1 collision resistance of the pin is mitigated (sha1dc + fsck), not solved.
 
 ## What the default container enforces
