@@ -2,11 +2,15 @@
 #
 # vibe tui project sidebar — the cross-project glance as a vertical pane
 # on the far left (graduated from the 2026-07-22 spike; it REPLACES the
-# old status-line-2 strip): every project session on the vibe socket with
-# its state dots (the same @vibe_glyph / @vibe_dot_fg / @vibe_attn data
-# state-render.sh maintains for the tabs), the workspace name in bold
-# (bright = the session this sidebar lives in, dim = the others), and the
-# checkout's git branch underneath.
+# old status-line-2 strip). Two sections:
+#   top    — the fleet: every project session on the vibe socket with its
+#            state dots (the same @vibe_glyph / @vibe_dot_fg / @vibe_attn
+#            data state-render.sh maintains for the tabs), the workspace
+#            name in bold (bright = the session this sidebar lives in),
+#            and the checkout's git branch underneath; click = switch
+#   bottom — the agent roster, AGGREGATE across all projects ("glyph
+#            name · project", bottom-anchored): every stateful window on
+#            the socket; click = jump to that project AND that window
 #
 # GLOBAL across the whole UI: @vibe_sidebar_on (conf defaults it to 1) is
 # the one switch, and the conf's ensure hooks (after-new-window /
@@ -39,6 +43,7 @@ set -u
 
 mode="${1:-render}"
 tab="$(printf '\t')"
+us="$(printf '\037')"
 
 sidebar_panes() { # sidebar pane ids in window $1, oldest first
   tmux list-panes -t "$1" -F "#{pane_id}$tab#{@vibe_role}" 2>/dev/null |
@@ -58,12 +63,12 @@ create_in() {
   # can't type into the render loop; focus returns to where the user was.
   pane="$(tmux split-window -fhb -l "$(sidebar_w)" -t "$win" -P -F '#{pane_id}' \
     "exec bash '$self' render")"
-  # Empty pane-level @vibe_glyph: user-option lookup cascades pane ->
-  # window, so without this the window's agent dot bleeds onto the
-  # sidebar's border title (host bug, 2026-07-22 screenshot).
+  # No pane-level @vibe_glyph shadow here: the border format role-gates
+  # the dot instead. (The old empty-string shadow leaked further than the
+  # border — window-format lookups resolve user options through the
+  # ACTIVE pane, so a focused sidebar erased its window's dot everywhere.)
   tmux set-option -p -t "$pane" @vibe_role "sidebar" \; \
     set-option -p -t "$pane" @vibe_title "projects" \; \
-    set-option -p -t "$pane" @vibe_glyph "" \; \
     select-pane -d -t "$pane" \; \
     select-pane -l
 }
@@ -117,7 +122,17 @@ click)
       "$y":*) sid="${entry#*:}" && break ;;
     esac
   done
-  [ -n "$sid" ] || exit 0 # gutter/blank row — not a project
+  [ -n "$sid" ] || exit 0 # gutter/blank row — not a target
+  case "$sid" in
+    *:@*)
+      # agent roster row: "SESSION:WINDOW" — make that window current in
+      # its session, then bring this client over
+      win="${sid##*:}"
+      sess="${sid%%:*}"
+      tmux select-window -t "$win" 2>/dev/null
+      sid="$sess"
+      ;;
+  esac
   if [ -n "$client" ]; then
     tmux switch-client -c "$client" -t "$sid" 2>/dev/null
   else
@@ -187,9 +202,12 @@ branch_of() {
 }
 
 frame() {
-  width="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{pane_width}' 2>/dev/null)"
+  info="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{pane_width} #{pane_height} #{session_id} #{session_name}' 2>/dev/null)" || info=""
+  read -r width height sid_self here <<EOF0
+$info
+EOF0
   case "$width" in '' | *[!0-9]*) width=30 ;; esac
-  here="$(tmux display-message -p -t "${TMUX_PANE:-}" '#{session_name}' 2>/dev/null)" || here=""
+  case "$height" in '' | *[!0-9]*) height=24 ;; esac
   # Text budget: 2-col left gutter, keep 1 clear on the right.
   max=$((width - 3))
   [ "$max" -lt 8 ] && max=8
@@ -201,23 +219,51 @@ frame() {
   # off-by-one in mouse_y indexing across tmux versions.
   row=0
   map=""
+  agent_lines=""
+  n_agents=0
   while IFS="$tab" read -r sid name path; do
     [ -n "$sid" ] || continue
     # Dots: window order, same semantics as the tabs — attention renders
     # coral (the tab-blend @vibe_dot_fg would vanish here), plain windows
-    # (host shells, popups) emit nothing.
+    # (host shells, popups) emit nothing. The same pass collects the
+    # AGGREGATE agent roster for the bottom section: every stateful
+    # window across every project, "glyph name · project", click target
+    # session+window.
     dots=""
     ndots=0
-    while IFS="$tab" read -r glyph dfg attn; do
+    # US (\037) separator, NOT tab: tab is whitespace-class, so read
+    # COLLAPSES adjacent tabs and empty fields shift everything left —
+    # a window with an unset option scrambled the roster (live bug).
+    while IFS="$us" read -r glyph dfg attn wid wname wactive; do
       [ -n "$glyph" ] || continue
       ndots=$((ndots + 1))
       if [ "$attn" = "1" ]; then
-        dots="$dots ${c_coral}●"
+        dotc="${c_coral}"
       else
-        dots="$dots $(fg "${dfg:-#5c6b96}")$glyph"
+        dotc="$(fg "${dfg:-#5c6b96}")"
       fi
+      dots="$dots ${dotc}${glyph}"
+      # roster row: the client's own active agent gets the coral mark +
+      # bright name; everything else stays calm
+      if [ "$sid" = "$sid_self" ] && [ "$wactive" = "1" ]; then
+        amark="${c_coral}▍" acol="${bold}${c_fg}"
+      else
+        amark=" " acol="$c_fg"
+      fi
+      wn="$wname"
+      [ "${#wn}" -gt 12 ] && wn="$(printf '%.11s' "$wn")…"
+      pmax=$((max - ${#wn} - 6))
+      pj=" ${c_dim}· $name"
+      if [ "$pmax" -lt 4 ]; then
+        pj=""
+      elif [ "${#name}" -gt "$pmax" ]; then
+        pj=" ${c_dim}· $(printf '%.*s' $((pmax - 1)) "$name")…"
+      fi
+      n_agents=$((n_agents + 1))
+      agent_lines="$agent_lines
+$sid:$wid$tab${amark}${reset} ${dotc}${glyph}${reset} ${acol}${wn}${reset}${pj}${reset}"
     done <<EOF2
-$(tmux list-windows -t "$sid" -F "#{@vibe_glyph}$tab#{@vibe_dot_fg}$tab#{@vibe_attn}" 2>/dev/null)
+$(tmux list-windows -t "$sid" -F "#{@vibe_glyph}$us#{@vibe_dot_fg}$us#{@vibe_attn}$us#{window_id}$us#{window_name}$us#{window_active}" 2>/dev/null)
 EOF2
     if [ "$name" = "$here" ]; then
       mark="${c_coral}▍" name_c="$c_fg"
@@ -249,6 +295,42 @@ $eol"
 $(tmux list-sessions -F "#{session_id}$tab#{session_name}$tab#{session_path}" 2>/dev/null | sort -t "$tab" -k2)
 EOF
   printf '%s\033[J' "$buf"
+
+  # ── agents: the aggregate roster, anchored to the pane bottom ─────────
+  # Skipped entirely when the fleet section leaves no room (min: header +
+  # one row + one blank gap). When only PART fits, the last visible row
+  # becomes a dim overflow count instead of silently clipping.
+  min_start=$((row + 2))
+  n_show="$n_agents"
+  start=$((height - n_agents - 1))
+  if [ "$start" -lt "$min_start" ]; then
+    n_show=$((height - min_start - 1))
+    start="$min_start"
+  fi
+  if [ "$n_agents" -gt 0 ] && [ "$n_show" -ge 1 ]; then
+    out="$(printf '\033[%d;1H' $((start + 1)))${c_dim}agents${reset}${eol}"
+    r=$((start + 1))
+    i=0
+    overflow=$((n_agents - n_show))
+    while IFS="$tab" read -r target aline; do
+      [ -n "$target" ] || continue
+      if [ "$overflow" -gt 0 ] && [ "$i" -eq $((n_show - 1)) ]; then
+        out="$out$(printf '\033[%d;1H' $((r + 1)))   ${c_dim}… +$((overflow + 1)) more${reset}${eol}"
+        i=$((i + 1))
+        break
+      fi
+      out="$out$(printf '\033[%d;1H' $((r + 1)))${aline}${eol}"
+      map="$map $r:$target"
+      r=$((r + 1))
+      i=$((i + 1))
+      [ "$i" -ge "$n_show" ] && break
+    done <<EOF3
+${agent_lines#
+}
+EOF3
+    printf '%s' "$out"
+  fi
+
   map="${map# }"
   if [ "$map" != "$last_map" ]; then
     tmux set-option -p -t "${TMUX_PANE:-}" @vibe_sidebar_map "$map" 2>/dev/null
