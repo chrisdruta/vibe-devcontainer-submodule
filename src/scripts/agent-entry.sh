@@ -163,17 +163,23 @@ if [ "$carrier" = "tmux" ]; then
   # reattaches a session created the other way; the non-nested branch
   # symmetrically resets both (-u = back to server defaults), so a
   # session born nested is fully drivable from a plain terminal.
+  # Name the window after the agent binary (-n also turns off
+  # automatic-rename for it): nothing nested shows inner names, but
+  # `tmux list-windows -a` reading "claude | preview | codex" beats three
+  # windows all named after the env-run wrapper ("bash"). Ignored on -A
+  # reattach, like every other creation flag.
+  win_name="${agent_cmd[0]##*/}"
   if [ "${VIBE_NESTED:-0}" = "1" ]; then
     # Explicit -t: without it the chained command binds to whatever session
     # tmux considers current, not necessarily the one just created. Plain
     # name, no "=" — set-option's -t is a pane target, which rejects the
     # exact-match prefix (verified on 3.7b); exact names win over prefix
     # matches, and these session names are harness-controlled anyway.
-    exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; \
+    exec tmux new-session -A -s "$session" -n "$win_name" "$(printf "%q " "${cmd[@]}")" \; \
       set-option -t "$session" status off \; \
       set-option -t "$session" prefix None
   fi
-  exec tmux new-session -A -s "$session" "$(printf "%q " "${cmd[@]}")" \; \
+  exec tmux new-session -A -s "$session" -n "$win_name" "$(printf "%q " "${cmd[@]}")" \; \
     set-option -t "$session" -u status \; \
     set-option -t "$session" -u prefix
 fi
