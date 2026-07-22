@@ -56,10 +56,12 @@ consuming project — bias toward small, reviewable, backward-compatible commits
   run on stock macOS as well as WSL (`verify.sh` gates this under `bash:3.2`).
 - The container image must build for both linux/amd64 and linux/arm64
   (Apple Silicon); new installers must handle `aarch64`.
-- The legacy `.devcontainer/` layout stays recognized (read-only) by
-  `repo-root.sh`, `lib.sh`, `update.sh`, and the container-side walks until
-  every known consumer has migrated — `vibe update` running on the old layout
-  is how projects cross the engine swap.
+- The legacy `.devcontainer/` layout is recognized ONLY as a migration
+  sensor: `repo-root.sh` detects it so the launcher prints the migration
+  error and `vibe update` still runs on an unmigrated checkout — that is
+  how projects cross the engine swap. Container-side config walks and the
+  status/down docker-label fallbacks no longer know it (removed 2026-07-22
+  with all known consumers migrated).
 
 ## Shell conventions
 

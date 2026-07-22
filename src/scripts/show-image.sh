@@ -51,10 +51,8 @@ if [ -z "$path" ]; then
   # guess breaks under the baked copy.
   dir="$PWD"
   while [ "$dir" != "/" ]; do
-    for cfg in "$dir/.vibe/config.env" "$dir/.devcontainer/config.env"; do
-      # shellcheck disable=SC1090  # runtime project config
-      if [ -f "$cfg" ]; then . "$cfg"; break 2; fi
-    done
+    # shellcheck disable=SC1091  # runtime project config
+    if [ -f "$dir/.vibe/config.env" ]; then . "$dir/.vibe/config.env"; break; fi
     dir="$(dirname -- "$dir")"
   done
   watch_dir="${VIBE_PREVIEW_DIR:-/tmp}"

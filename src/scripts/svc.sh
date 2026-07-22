@@ -21,18 +21,15 @@ shift
 [ "$#" -ge 1 ] || { echo "$usage" >&2; exit 2; }
 
 # Hooks don't source config.env; resolve the session name from the nearest
-# project config above $PWD (hooks run at the repo root; legacy layout
-# covered for pre-migration projects).
+# project config above $PWD (hooks run at the repo root).
 if [ -z "${DEV_ATTACH_TMUX_SESSION:-}" ]; then
   dir="$PWD"
   while [ "$dir" != "/" ]; do
-    for cfg in "$dir/.vibe/config.env" "$dir/.devcontainer/config.env"; do
-      if [ -f "$cfg" ]; then
-        # shellcheck disable=SC1090
-        source "$cfg"
-        break 2
-      fi
-    done
+    if [ -f "$dir/.vibe/config.env" ]; then
+      # shellcheck disable=SC1091  # runtime project config
+      source "$dir/.vibe/config.env"
+      break
+    fi
     dir="$(dirname -- "$dir")"
   done
 fi

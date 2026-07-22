@@ -221,16 +221,14 @@ EOF
 }
 
 # Discovery is by label, not container name — resilient to compose naming
-# changes. Three labels, three scopes: vibe.project marks the dev container
-# (set in base.yaml), the compose-project label covers EVERY service compose
+# changes. Two labels, two scopes: vibe.project marks the dev container
+# (set in base.yaml); the compose-project label covers EVERY service compose
 # created for this project (dev + project sidecars — compose stamps it
-# itself), and the legacy filter lets status/down see (and clean up) a
-# devcontainer-CLI-era container during migration. Never combine two label
-# filters in one `docker ps` — docker ANDs repeated label filters, so a
-# combined call matches only containers carrying BOTH labels (i.e. nothing).
+# itself). Never combine two label filters in one `docker ps` — docker ANDs
+# repeated label filters, so a combined call matches only containers
+# carrying BOTH labels (i.e. nothing).
 label_filter="label=vibe.project=$repo_root"
 compose_filter="label=com.docker.compose.project=$project_name"
-legacy_filter="label=devcontainer.local_folder=$repo_root"
 
 container_id() {
   docker ps -q --filter "$label_filter" | head -n 1
@@ -311,16 +309,9 @@ case "$command_name" in
   status)
     # All of this project's service containers (dev + sidecars), running or
     # stopped — the compose-project label covers them without needing the
-    # compose files to parse. Legacy-era container shown separately.
+    # compose files to parse.
     docker ps -a --filter "$compose_filter" \
       --format 'table {{.Names}}\t{{.Label "com.docker.compose.service"}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}'
-    legacy_ids="$(docker ps -aq --filter "$legacy_filter")"
-    if [[ -n "$legacy_ids" ]]; then
-      echo
-      echo "Legacy devcontainer-era container (vibe down removes it):"
-      docker ps -a --filter "$legacy_filter" \
-        --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}'
-    fi
     exit 0
     ;;
   down)
@@ -330,12 +321,11 @@ case "$command_name" in
     # sidecar data) are kept — `vibe up` recreates everything else.
     ids="$(docker ps -aq --filter "$label_filter"; docker ps -aq --filter "$compose_filter")"
     ids="$(printf '%s\n' "$ids" | sort -u | grep . || true)"
-    legacy_ids="$(docker ps -aq --filter "$legacy_filter")"
-    if [[ -z "$ids" && -z "$legacy_ids" ]]; then
+    if [[ -z "$ids" ]]; then
       echo "No containers found for $repo_root" >&2
       exit 0
     fi
-    if [[ -n "$ids" ]] && ! compose down --remove-orphans; then
+    if ! compose down --remove-orphans; then
       # Broken/missing compose files (half-migrated repo, syntax error):
       # degrade to label cleanup so down never strands containers.
       echo "compose down failed — removing containers by label instead." >&2
@@ -343,9 +333,6 @@ case "$command_name" in
       docker rm -f $ids
       docker network rm "${project_name}_default" >/dev/null 2>&1 || true
     fi
-    # Devcontainer-era container predates the compose labels entirely.
-    # shellcheck disable=SC2086
-    [[ -z "$legacy_ids" ]] || docker rm -f $legacy_ids
     exit 0
     ;;
   attach)

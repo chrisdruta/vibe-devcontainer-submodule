@@ -12,8 +12,7 @@
 #
 # Config resolution: the harness config (vibe.yazi plugin, A/R verdict
 # keybindings -> vibe-verdict, badge linemode) is the base; a project-owned
-# <vibe-dir>/yazi/ (.vibe/, or legacy .devcontainer/; seeded from
-# templates/yazi) layers on top — its
+# .vibe/yazi/ (seeded from templates/yazi) layers on top — its
 # yazi.toml/theme.toml replace wholesale, its keymap entries merge in front.
 #
 # Baked as /usr/local/bin/vibe-preview (tmux prefix+i can't know the
@@ -57,20 +56,18 @@ client_id_for() {
 # harness's. Also exports the project's config.env (VIBE_REVIEW_DECISIONS
 # etc.) into yazi's environment.
 resolve_config_home() {
-  local dir="$PWD" proj="" base="" c vd
+  local dir="$PWD" proj="" base="" c
   while [ "$dir" != "/" ]; do
-    for vd in .vibe .devcontainer; do
-      if [ -d "$dir/$vd/yazi" ] || [ -f "$dir/$vd/compose.yaml" ] || [ -f "$dir/$vd/devcontainer.json" ]; then
-        [ -d "$dir/$vd/yazi" ] && proj="$dir/$vd/yazi"
-        if [ -f "$dir/$vd/config.env" ]; then
-          set -a
-          # shellcheck disable=SC1090  # runtime project config
-          . "$dir/$vd/config.env"
-          set +a
-        fi
-        break 2
+    if [ -d "$dir/.vibe/yazi" ] || [ -f "$dir/.vibe/compose.yaml" ]; then
+      [ -d "$dir/.vibe/yazi" ] && proj="$dir/.vibe/yazi"
+      if [ -f "$dir/.vibe/config.env" ]; then
+        set -a
+        # shellcheck disable=SC1091  # runtime project config
+        . "$dir/.vibe/config.env"
+        set +a
       fi
-    done
+      break
+    fi
     dir="$(dirname -- "$dir")"
   done
   for c in "$script_dir/../config/yazi" /usr/local/lib/vibe/yazi; do
