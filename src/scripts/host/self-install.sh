@@ -90,7 +90,7 @@ say "Materialized harness version: ${sha}"
 if [ -n "$project_root" ]; then
   digest="$(vibe_checkout_digest "$project_root")" || exit 1
   record="$home/state/projects/$digest"
-  [ -n "$project_name" ] || project_name="$(vibe_project_slug "$project_root" 2>/dev/null || echo vibe)"
+  [ -n "$project_name" ] || project_name="$(vibe_project_slug "$project_root")-$(vibe_checkout_suffix "$project_root")"
   [ -n "$ws_base" ] || ws_base="$(basename -- "$project_root")"
   vibe_record_write "$record" \
     "sha=$sha" "project_name=$project_name" "ws_base=$ws_base" \

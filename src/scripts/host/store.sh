@@ -569,8 +569,27 @@ vibe_render_compose() {
 # the rendered YAML with grep/awk — it is compose's own normalized output, and
 # we FAIL CLOSED: an unrecognized shape that could hide a violation is treated
 # as a violation.
+# Emit "source|target|readonly" for each bind volume in a rendered compose
+# model (read on stdin). `docker compose config` always normalizes volumes to
+# long form, so a per-list-item state machine is reliable; nested bind:/volume:
+# sub-maps are deeper keys that never match the source/target/read_only lines.
+vibe_compose_binds() {
+  awk '
+    function flush() { if (started) print src"|"tgt"|"ro; started=0; src=""; tgt=""; ro="false" }
+    /^[[:space:]]*-[[:space:]]/ {
+      if ($0 ~ /type:[[:space:]]*bind/) { flush(); started=1; next }
+      flush(); next
+    }
+    started && /^[[:space:]]*source:[[:space:]]/ { s=$0; sub(/^[[:space:]]*source:[[:space:]]*/,"",s); gsub(/["'"'"']/,"",s); src=s }
+    started && /^[[:space:]]*target:[[:space:]]/ { s=$0; sub(/^[[:space:]]*target:[[:space:]]*/,"",s); gsub(/["'"'"']/,"",s); tgt=s }
+    started && /^[[:space:]]*read_only:[[:space:]]*true/ { ro="true" }
+    END { flush() }
+  '
+}
+
+# Args: rendered ws_base repo_canonical store_versions_dir
 vibe_enforce_compose() {
-  local rendered="$1" ws_base="$2"
+  local rendered="$1" ws_base="$2" repo_canon="${3:-}" store_versions="${4:-}"
   local violations="" model
   model="$(cat "$rendered")"
 
@@ -629,10 +648,48 @@ vibe_enforce_compose() {
     violations="$violations cap_drop-not-ALL"
   fi
 
-  # The exact RO harness overmount must be present with read_only true. We
-  # check the rendered model names the harness target as read-only.
-  local target="/workspaces/$ws_base/.vibe/harness"
-  if ! printf '%s\n' "$model" | grep -Fq "$target"; then
+  # Bind-mount enforcement (the host-escape surface the text greps miss): parse
+  # every bind and check source + read_only. The harness overmount must be a
+  # read-only bind whose source is a trusted store version; any OTHER absolute
+  # host-path bind (a sidecar mounting /, /etc, ~/.ssh, …) is refused. Allowed
+  # sources: the workspace repo root (or a subpath) and /dev/null (the
+  # documented .env-blanking pattern).
+  local harness_target="/workspaces/$ws_base/.vibe/harness"
+  local saw_overmount=0 line b_src b_tgt b_ro
+  while IFS='|' read -r b_src b_tgt b_ro; do
+    [ -n "$b_tgt" ] || continue
+    if [ "$b_tgt" = "$harness_target" ]; then
+      saw_overmount=1
+      if [ "$b_ro" != "true" ]; then
+        violations="$violations harness-overmount-not-readonly"
+      fi
+      if [ -n "$store_versions" ]; then
+        case "$b_src" in
+          "$store_versions"/*) ;;
+          *) violations="$violations harness-overmount-foreign-source" ;;
+        esac
+      fi
+      continue
+    fi
+    # Non-harness bind. Only absolute host-path sources are a concern; named
+    # volumes render as type: volume (never reach here).
+    case "$b_src" in
+      /dev/null) ;;
+      /*)
+        local ok=0
+        [ -n "$repo_canon" ] && case "$b_src" in
+          "$repo_canon" | "$repo_canon"/*) ok=1 ;;
+        esac
+        [ -n "$store_versions" ] && case "$b_src" in
+          "$store_versions"/*) ok=1 ;;
+        esac
+        [ "$ok" = 1 ] || violations="$violations host-bind:$b_src"
+        ;;
+    esac
+  done <<EOF
+$(printf '%s\n' "$model" | vibe_compose_binds)
+EOF
+  if [ "$saw_overmount" = 0 ]; then
     violations="$violations missing-harness-overmount"
   fi
 
@@ -661,9 +718,11 @@ vibe_compose_gate() {
     return 1
   fi
 
-  # Structural enforcement.
+  # Structural enforcement. Pass the canonical repo root and the store versions
+  # dir so bind sources can be allowlisted (workspace + trusted overmount only).
+  local root_canon; root_canon="$(cd -- "$root" && pwd -P)"
   local enforce_rc=0
-  vibe_enforce_compose "$rendered" "$ws" "$hdir" || enforce_rc=$?
+  vibe_enforce_compose "$rendered" "$ws" "$root_canon" "$home/versions" || enforce_rc=$?
   if [ "$enforce_rc" = "2" ]; then
     if [ "$unsafe" = "--unsafe" ]; then
       printf '\n*** --unsafe: the container boundary is DISABLED for this command. ***\n' >&2

@@ -137,17 +137,56 @@ services:
         target: /workspaces/$ws/.vibe/harness
         read_only: true
 YAML
-vibe_enforce_compose "$enf_dir/clean.yaml" "$ws" >/dev/null 2>&1 \
+enf_store="$store_tmp/versions"
+vibe_enforce_compose "$enf_dir/clean.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1 \
   || { echo "FAIL: clean compose rejected by enforcement" >&2; exit 1; }
 for attack in "privileged: true" "cap_add: [SYS_ADMIN]" "network_mode: host"; do
   { printf 'services:\n  dev:\n    user: vscode\n    cap_drop: [ALL]\n'
     printf '    security_opt: [no-new-privileges:true]\n    %s\n' "$attack"
-    printf '    volumes:\n      - type: bind\n        source: /s\n        target: /workspaces/%s/.vibe/harness\n        read_only: true\n' "$ws"
+    printf '    volumes:\n      - type: bind\n        source: %s/x\n        target: /workspaces/%s/.vibe/harness\n        read_only: true\n' "$enf_store" "$ws"
   } >"$enf_dir/bad.yaml"
-  if vibe_enforce_compose "$enf_dir/bad.yaml" "$ws" >/dev/null 2>&1; then
+  if vibe_enforce_compose "$enf_dir/bad.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
     echo "FAIL: enforcement accepted a boundary-weakening config ($attack)" >&2; exit 1
   fi
 done
+# A sidecar that mounts the host root (or a RW/foreign harness overmount) is a
+# host escape the text greps miss — the bind-source parse must catch these.
+cat >"$enf_dir/rootbind.yaml" <<YAML
+services:
+  dev:
+    user: vscode
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: $enf_store/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: true
+  sidecar:
+    user: root
+    volumes:
+      - type: bind
+        source: /
+        target: /host
+YAML
+if vibe_enforce_compose "$enf_dir/rootbind.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+  echo "FAIL: enforcement accepted a sidecar binding the host root" >&2; exit 1
+fi
+cat >"$enf_dir/rwharness.yaml" <<YAML
+services:
+  dev:
+    user: vscode
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - type: bind
+        source: $enf_store/x
+        target: /workspaces/$ws/.vibe/harness
+        read_only: false
+YAML
+if vibe_enforce_compose "$enf_dir/rwharness.yaml" "$ws" "/nonexistent-repo" "$enf_store" >/dev/null 2>&1; then
+  echo "FAIL: enforcement accepted a writable harness overmount" >&2; exit 1
+fi
 # First contact must FAIL CLOSED without a tty (piped stdin here).
 fc_app="$store_tmp/fcapp"; mkdir -p "$fc_app/.vibe"; git -C "$fc_app" init -q
 : >"$fc_app/.vibe/compose.yaml"

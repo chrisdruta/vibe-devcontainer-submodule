@@ -151,6 +151,10 @@ if [ ! -f /.dockerenv ] && [ -n "$repo_root" ]; then
       _digest="$(vibe_checkout_digest "$repo_root")" || { echo "vibe: could not key project path" >&2; exit 1; }
       _record="$(vibe_record_path "$_digest")"
       _running_sha="$(basename -- "$self_dir")"
+      # Deterministic compose identity (per checkout) — the value first contact
+      # records and every fallback uses, so a project's namespace never depends
+      # on which path resolved it.
+      _identity="$(vibe_project_slug "$repo_root")-$(vibe_checkout_suffix "$repo_root")"
       if [ -f "$_record" ]; then
         # Stale-record guard: the record's root must still be THIS checkout.
         _rec_root="$(vibe_record_get "$_record" root 2>/dev/null || true)"
@@ -169,7 +173,7 @@ if [ ! -f /.dockerenv ] && [ -n "$repo_root" ]; then
           # Pin drift: the committed gitlink moved past the trusted sha.
           _pin="$(vibe_read_pin "$repo_root" 2>/dev/null || true)"
           if [ -n "$_pin" ] && [ "$_pin" != "$_trusted" ]; then
-            _dest="$(vibe_first_contact "$repo_root" "$self_dir" "$(basename -- "$repo_root")" "${project_name:-vibe}")" || exit 1
+            _dest="$(vibe_first_contact "$repo_root" "$self_dir" "$(basename -- "$repo_root")" "${project_name:-$_identity}")" || exit 1
             exec bash "$_dest/vibe" "$@"
           fi
         fi
@@ -185,7 +189,7 @@ if [ ! -f /.dockerenv ] && [ -n "$repo_root" ]; then
         fi
       else
         # First contact: prompt, materialize, record, then run as that version.
-        _dest="$(vibe_first_contact "$repo_root" "$self_dir" "$(basename -- "$repo_root")" "vibe")" || exit 1
+        _dest="$(vibe_first_contact "$repo_root" "$self_dir" "$(basename -- "$repo_root")" "$_identity")" || exit 1
         if [ "$(basename -- "$_dest")" != "$_running_sha" ]; then
           exec bash "$_dest/vibe" "$@"
         fi
