@@ -6,6 +6,80 @@ Reducing **accidental host damage** from an agent working at machine speed: a ba
 `rm`, a curl-piped installer, a runaway build. It is a guardrail, not a jail — it
 does not make running untrusted code safe.
 
+The container is the isolation boundary, and the harness is built so a process
+**inside** the container cannot reach **host** execution or the docker daemon by
+tampering with files it can write. That property is the **host root of trust**
+below.
+
+## Host root of trust
+
+The one rule the host-side code serves:
+
+> The host never executes, sources, evals, or feeds to the docker daemon any
+> byte a container could have written. Host code runs only from a materialized,
+> content-verified snapshot; host-consumed project inputs are snapshotted and
+> frozen before use; project identity and trust live outside every workspace
+> bind.
+
+How it works:
+
+- **The store (`~/.vibe`, mode 0700).** Host-executed harness code lives only in
+  `~/.vibe/versions/<sha>/` — immutable trees materialized from git objects
+  (isolated fetch + `git fsck`, `git archive` rather than a checkout so no hooks
+  run, symlinks/gitlinks/special files rejected, an SHA-256 manifest, frozen
+  read-only). Nothing under a workspace bind is ever executed by the host.
+- **The shim.** `~/.vibe/bin/vibe` on your PATH is the only host entry point. It
+  reads no workspace code: it resolves the project you are in to the version it
+  trusts and execs that, after verifying it against its manifest. The root
+  `./vibe` symlink is gone — a workspace file cannot safely tell host from
+  container before it has already run. Inside the container a `vibe` on PATH is
+  the in-container spelling (there, the workspace is within the boundary).
+- **Trust is a human action.** First contact with a project prompts you with the
+  pin and whether it is reachable from a release in your host-owned mirror
+  (publisher authentication); a pin that moved re-prompts before the new code
+  runs. Non-interactive contexts fail closed (`vibe provision` records exact
+  trust for CI).
+- **The RO overmount.** The container gets the *same* trusted tree, read-only,
+  overmounted at `.vibe/harness` — so host and container run the identical SHA,
+  and in-container tampering with harness files cannot propagate to host
+  execution (`vibe doctor` verifies the mount is read-only).
+- **The compose gate.** `.vibe/compose.yaml` / `Dockerfile` are container-
+  writable, so they never reach the daemon directly. Every `vibe up`/`rebuild`/
+  `build`/`config` snapshots the control files host-side, renders the merged
+  config under a scrubbed environment (no project `.env` interpolation), and
+  **structurally enforces** the boundary invariants on the rendered model —
+  non-root `vscode`, `cap_drop: [ALL]`, `no-new-privileges`, the exact workspace
+  and RO-harness mounts, and NONE of: `privileged`, `cap_add`, `devices`, host
+  namespaces, a docker socket at any path, `use_api_socket`, SSH/host-secret
+  binds. A project that genuinely needs one of these must pass `--unsafe`, which
+  loudly disables the boundary for that one command. The build context is the
+  trusted store `src`, never the container-writable submodule.
+- **Update through the mirror only.** `vibe update` fetches and diffs from the
+  host-owned canonical mirror and stages the submodule gitlink with
+  `update-index` — it never fetches, checks out, or runs git porcelain against
+  the container-writable workspace submodule (which could carry a planted
+  `post-checkout` hook or credential helper).
+- **Dogfood / dev mode.** `vibe dev` develops the harness against the store:
+  host execution still runs a *materialized snapshot* of your working tree
+  (`vibe dev sync` re-snapshots after edits) — never the live bind.
+
+### Residual host exposure (not covered by the boundary)
+
+- **Manual execution of workspace content by a human.** Running
+  `bash .vibe/harness/vibe`, `git` with a repo-local `core.hooksPath`, `make`,
+  `direnv`, etc. by hand executes workspace code outside every guardrail. The
+  harness auto-runs none of it; it cannot stop a person who does.
+- **Terminal-emulator surface.** The container controls bytes reaching your host
+  tmux and terminal (escape sequences, clipboard). That is a terminal-hardening
+  concern, outside the mount boundary.
+- **A separately-exposed Docker API.** A `DOCKER_HOST` pointing at a TCP daemon
+  is as powerful as the socket; `vibe doctor` flags it, but the harness can only
+  see what compose renders, not your host docker configuration.
+- **Same-basename checkouts still share the agent-state volume**
+  (`agent-state-<basename>`) despite distinct host trust records — documented
+  ABI, not isolation.
+- SHA-1 collision resistance of the pin is mitigated (sha1dc + fsck), not solved.
+
 ## What the default container enforces
 
 - Runs as `vscode`, never root; passwordless sudo is removed from the image

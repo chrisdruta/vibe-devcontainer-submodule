@@ -35,10 +35,19 @@ The installer:
    chosen preset — selected extras get their build args set to `"true"` in the seeded
    `compose.yaml` — plus `.claude/settings.json` (statusline, image-preview
    hooks, sudo/`.env`-read deny) unless the project already has one,
-2. links `./vibe -> .vibe/vibe` at the repository root,
-3. registers the submodule if needed (already done in the flow above; a plain
+2. registers the submodule if needed (already done in the flow above; a plain
    `git clone` into `.vibe/harness` gets absorbed),
+3. **bootstraps the host trust store** (`~/.vibe`): installs the `vibe` shim onto
+   your PATH surface, records the canonical harness remote, materializes this
+   pin into the store, and records this project's trust (see
+   [security.md → Host root of trust](security.md)). Pass `--no-self` to skip
+   this (e.g. CI that provisions the store separately),
 4. stages everything — nothing is committed; review with `git status` and commit.
+
+There is **no** root `./vibe` symlink: the host spelling is `vibe` on your PATH
+(the shim), which runs only trusted, materialized code — never the workspace
+copy. Add `~/.vibe/bin` to your PATH if the bootstrap says it isn't there. Inside
+the container, a `vibe` on the container PATH is the in-container spelling.
 
 The pin is whatever `git submodule add` cloned (branch tip); pin a tagged
 release afterwards with `./vibe update vX.Y.Z` — it stages the move for
@@ -89,9 +98,13 @@ git submodule set-url .vibe/harness https://github.com/chrisdruta/vibe-tui-box.g
 
 ```bash
 cd ~/dev/my-project
-./vibe up        # builds the image, starts the container, bootstraps
-./vibe agent     # launches the default agent (Claude Code)
+vibe up        # builds the image, starts the container, bootstraps
+vibe agent     # launches the default agent (Claude Code)
 ```
+
+`vibe` here is the shim on your PATH. On first run in a project it shows the
+harness pin and asks you to trust it once (host root of trust); after that it
+runs the trusted, materialized version directly.
 
 On first `vibe agent`, Claude Code walks through its login. Logins persist in a
 named volume per project — see [agent-state.md](agent-state.md).
@@ -107,10 +120,15 @@ permission set in its next-steps output, and
 git clone --recurse-submodules <project-url>
 # or, after a plain clone / in a new git worktree:
 git submodule update --init
+
+# Bootstrap the host trust store from the checkout you just reviewed:
+.vibe/harness/install.sh --self
 ```
 
-The seeded `.vibe/vibe` wrapper prints exactly that hint if the submodule
-is missing.
+The `--self` step establishes `~/.vibe` on this machine (shim on PATH, canonical
+remote, materialize this pin, record this project's trust) — the one bootstrap
+ceremony that runs workspace code, from a checkout you deliberately invoked.
+Afterwards `vibe` on your PATH is the only host entry point.
 
 ## Uninstall from a project
 
@@ -119,9 +137,10 @@ git submodule deinit -f .vibe/harness
 git rm -f .vibe/harness
 rm -rf "$(git rev-parse --git-common-dir)/modules/.vibe/harness"
 git rm -r .vibe          # also remove the project-owned files, if desired
-git rm vibe              # the root symlink
 docker volume rm agent-state-<folder-name>   # discard persisted agent logins
 ```
 
-The container and image can be removed with `./vibe down` (before removing
+Then drop the project's trust record and cached versions from the store if you
+like: `rm ~/.vibe/state/projects/*` (per project) or remove `~/.vibe` entirely.
+The container and image can be removed with `vibe down` (before removing
 `.vibe`) and `docker rmi` (`docker images | grep vibe-`).

@@ -69,6 +69,32 @@ Everything above `harness/` belongs to the project and is seeded once by
 Everything inside `harness/` must remain repo-agnostic: no project names, paths,
 services, or ports.
 
+## The host trust store (`~/.vibe`)
+
+`.vibe/harness` in the workspace is the pin and the review artifact, but the host
+never *executes* it. Host-executed harness code lives in a separate, host-only
+store (`~/.vibe`, outside every workspace bind), and the container gets that same
+tree read-only:
+
+```text
+~/.vibe/                        # mode 0700
+├── bin/vibe                    # the shim — the only host entry point (on PATH)
+├── versions/<sha>/             # immutable, manifest-verified harness trees
+├── versions/<sha>.manifest     # sha256 <mode> <path> per file
+├── repo.git                    # host-owned canonical mirror (publisher auth)
+├── canonical-remote            # the trusted upstream URL (never from a workspace)
+└── state/
+    ├── projects/<digest>       # per-project trust records (strict k=v data)
+    └── snapshots/<digest>/     # host-only compose control-file snapshots
+```
+
+The shim resolves the project you are in to the version it trusts and execs that;
+`src/scripts/host/store.sh` is the library (materialize, verify, records, the
+compose snapshot→render→enforce gate). The container mounts
+`~/.vibe/versions/<sha>` read-only over `.vibe/harness`, so every existing
+in-container script path keeps working while pointing at host-verified code.
+Full rules and threat model: [security.md → Host root of trust](security.md).
+
 Distribution is a pinned git submodule: consuming repos reference an exact commit,
 updates are explicit and reviewable ([updating.md](updating.md)), and one clone
 serves every project. Presets are render-time deltas over a single template — not

@@ -28,10 +28,22 @@ consuming project — bias toward small, reviewable, backward-compatible commits
   changing it logs every consumer out of every agent. So are the `src/*` paths
   seeded consumer files reference (`.vibe/harness/src/scripts/...` in
   .claude/settings.json and seeded AGENTS.md). The compose project identity is
-  deliberately NOT basename-derived: it is per checkout
-  (`vibe-<basename>-<suffix>`, persisted in `.vibe/.project-id`,
-  git-info/exclude'd) — the id FILE is the identity, and checkouts that
-  predate it adopt their legacy unsuffixed name via the label probe in `vibe`.
+  per checkout (`vibe-<basename>-<suffix>`) and now lives in the HOST trust
+  record (`~/.vibe/state/projects/<digest>`), injected into the container as
+  `VIBE_PROJECT_NAME` — never the old workspace `.vibe/.project-id` file, which
+  a container could forge.
+- **Host root of trust (docs/security.md).** The host never executes, sources,
+  evals, or feeds to the docker daemon any byte a container could have written.
+  Host code runs only from a materialized, manifest-verified store version
+  (`~/.vibe/versions/<sha>/`, reached via the `~/.vibe/bin/vibe` shim on PATH);
+  the container gets that same tree RO-overmounted at `.vibe/harness`. There is
+  no host-executable workspace entry point (the root `./vibe` symlink is gone;
+  a `vibe` on the container PATH is the in-container spelling). The host may READ
+  project files (`config.env`, `compose.yaml`) strictly as DATA — never execute,
+  source, or eval them; project `compose.yaml` reaches the daemon only through
+  the snapshot → render-under-scrubbed-env → structural-enforce gate in
+  `src/scripts/host/store.sh`. `vibe update` operates on the host-owned mirror
+  only, never porcelain against the workspace submodule `.git`.
 - Lifecycle scripts stay idempotent and honor `DEV_BOOTSTRAP_STRICT`; `vibe up`
   runs post-create once per container (`/var/tmp/.vibe-post-created` marker)
   and post-start on every actual start.
