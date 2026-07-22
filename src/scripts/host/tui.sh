@@ -192,6 +192,12 @@ if ! vtmux has-session -t "$session" 2>/dev/null; then
   vtmux set-option -p -t "$host_pane" @vibe_title "host"
 
   vtmux select-pane -t "$agent_pane"
+
+  # Global sidebar (conf defaults @vibe_sidebar_on to 1): new-session
+  # fires none of the ensure hooks, so stamp the fresh main window here;
+  # every later window is covered by the conf's hooks.
+  main_win="$(vtmux display-message -p -t "$session:main" '#{window_id}')"
+  vtmux run-shell -b "bash '$harness_dir/src/scripts/host/sidebar.sh' ensure '$main_win' 2>/dev/null || true"
 fi
 
 # Conf ownership: FIRST-OWNER-AUTHORITATIVE (2026-07-21 decision). The
