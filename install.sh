@@ -45,7 +45,31 @@ force=0
 target="."
 url=""
 ref="main"
+self_only=0
+no_self=0
 args_given=$#
+
+# `install.sh --self` (store bootstrap only): establish ~/.vibe from this
+# checkout — shim on PATH, canonical remote, materialize this pin, and record
+# the surrounding project's trust. Runs no seeding. This is the host
+# root-of-trust ceremony; see docs/security.md and docs/installation.md.
+script_dir_early="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+for _a in "$@"; do
+  case "$_a" in
+    --self) self_only=1 ;;
+    --no-self) no_self=1 ;;
+  esac
+done
+if [[ $self_only -eq 1 ]]; then
+  case "$script_dir_early" in
+    */.vibe/harness)
+      proj="${script_dir_early%/.vibe/harness}"
+      exec bash "$script_dir_early/src/scripts/host/self-install.sh" \
+        --project-root "$proj" --ws-base "$(basename -- "$proj")" ;;
+    *)
+      exec bash "$script_dir_early/src/scripts/host/self-install.sh" ;;
+  esac
+fi
 
 while (($#)); do
   case "$1" in
@@ -71,6 +95,10 @@ while (($#)); do
       ;;
     --force)
       force=1
+      shift
+      ;;
+    --self|--no-self)
+      # --self handled above (exec's out); --no-self recorded already. Consume.
       shift
       ;;
     -h|--help)
@@ -331,12 +359,17 @@ cp -a -- "$script_dir/src/templates/project" "$destination/project"
 cp -a -- "$script_dir/src/templates/yazi" "$destination/yazi"
 chmod +x "$destination/vibe" "$destination/project/"*.sh
 
-# Root-level convenience symlink: the everyday spelling is ./vibe up.
-# Committed; harmless on WSL/macOS checkouts. Never overwrites a real file.
-if [[ ! -e "$target/vibe" ]]; then
-  ln -s .vibe/vibe "$target/vibe"
-elif [[ ! -L "$target/vibe" ]]; then
-  echo "Note: $target/vibe exists and is not a symlink — left untouched."
+# No host-executable workspace entry point (host root-of-trust, decision A):
+# the root `./vibe` symlink is deliberately NOT created. A workspace file
+# cannot safely tell host from container before it has already run, so the
+# host spelling is `vibe` on PATH (the ~/.vibe/bin shim, installed by the
+# self-step below). The container gets its own `vibe` on PATH from
+# post-create.sh. If a legacy `./vibe` symlink is present from an older
+# install, remove it — it is now a host-execution hazard.
+if [[ -L "$target/vibe" ]]; then
+  echo "Removing legacy root ./vibe symlink (host uses 'vibe' on PATH now)."
+  rm -f "$target/vibe"
+  git -C "$target" rm -q --cached vibe >/dev/null 2>&1 || true
 fi
 
 # Claude Code project settings (statusline, image hooks, sudo/.env-read deny).
@@ -374,9 +407,6 @@ git -C "$target" add \
 if [[ -f "$destination/Dockerfile" ]]; then
   git -C "$target" add .vibe/Dockerfile .vibe/.dockerignore
 fi
-if [[ -L "$target/vibe" ]]; then
-  git -C "$target" add vibe
-fi
 if [[ $claude_settings_seeded -eq 1 ]]; then
   git -C "$target" add .claude/settings.json
 fi
@@ -402,16 +432,33 @@ if [[ $claude_settings_seeded -eq 0 ]]; then
   echo "  $script_dir/src/templates/claude-settings.json"
   echo
 fi
+# Host root-of-trust: bootstrap the ~/.vibe store from this checkout (shim on
+# PATH, canonical remote, materialize this pin, record this project's trust) so
+# host `vibe` runs only trusted, materialized code — never the workspace copy.
+# --no-self skips it (e.g. CI that provisions the store separately).
+if [[ $no_self -eq 0 ]]; then
+  echo
+  echo "Bootstrapping the host trust store (~/.vibe)…"
+  bash "$script_dir/src/scripts/host/self-install.sh" \
+    --project-root "$target" --ws-base "$(basename -- "$target")" \
+    ${url:+--remote "$url"} || {
+    echo "Note: store bootstrap did not complete — run it later with:"
+    echo "  $script_dir/install.sh --self"
+  }
+fi
+
+echo
 echo "Next:"
 echo "  1. Review .vibe/compose.yaml and config.env"
 echo "  2. Add '@.vibe/AGENTS.md' to the project's CLAUDE.md or AGENTS.md"
 echo "     so agents inherit the container rules (see docs/onboarding.md)"
-echo "  3. Run ./vibe up      (needs docker on the host — nothing else)"
-echo "  4. Run ./vibe agent"
+echo "  3. Ensure ~/.vibe/bin is on your PATH (the bootstrap prints the line)"
+echo "  4. Run  vibe up      (needs docker on the host — nothing else)"
+echo "  5. Run  vibe agent"
 if [[ $self_mode -eq 1 ]]; then
   echo
   echo "The submodule pin is whatever you just cloned; to pin the newest"
-  echo "release instead: ./vibe update    (stages the move for review)"
+  echo "release instead: vibe update    (stages the move for review)"
 fi
 echo
 echo "Optional — GitHub access from inside the container (git push, gh pr):"

@@ -690,3 +690,120 @@ vibe_compose_gate() {
   export VIBE_SNAPSHOT_COMPOSE VIBE_COMPOSE_SNAPSHOT_HASH
   return 0
 }
+
+# ── reading the project's pin as DATA (never porcelain on workspace .git) ──
+# The submodule gitlink SHA recorded in the superproject. Read via plumbing
+# against the superproject's object store as pure data — no checkout, no hook,
+# no config execution. Precedence: staged index > HEAD (a staged pin move is
+# what the human is about to commit).
+vibe_read_pin() {
+  local root="$1" sha
+  # Staged gitlink (index) first.
+  sha="$(git -C "$root" ls-files -s -- .vibe/harness 2>/dev/null | awk '$1==160000{print $2; exit}')"
+  if [ -z "$sha" ]; then
+    sha="$(git -C "$root" ls-tree HEAD -- .vibe/harness 2>/dev/null | awk '$2=="commit"{print $3; exit}')"
+  fi
+  case "$sha" in
+    *[!0-9a-f]* | "") return 1 ;;
+  esac
+  printf '%s\n' "$sha"
+}
+
+# ── first contact / pin-change trust prompt ───────────────────────────────
+# No record for this project (or the pin no longer matches the trusted sha):
+# authenticate the publisher (release-reachable in the host mirror, else mark
+# UNVERIFIED), show the human what they are trusting, confirm, materialize,
+# record. TTY-only; non-interactive fails closed (use `vibe provision`).
+# Args: root harness_dir ws_base project_name  -> prints the version dir.
+vibe_first_contact() {
+  local root="$1" harness_dir="$2" ws_base="$3" project_name="$4"
+  local home; home="$(vibe_store_init)" || return 1
+  local digest record pin trusted_sha desc verified
+  digest="$(vibe_checkout_digest "$root")" || return 1
+  record="$home/state/projects/$digest"
+  pin="$(vibe_read_pin "$root")" || { printf 'vibe: could not read the harness pin from %s\n' "$root" >&2; return 1; }
+
+  trusted_sha="$(vibe_record_get "$record" sha 2>/dev/null || true)"
+  if [ "$pin" = "$trusted_sha" ] && [ -d "$home/versions/$pin" ]; then
+    printf '%s\n' "$home/versions/$pin"; return 0   # already trusted & present
+  fi
+
+  # Publisher authentication: refresh mirror, is the pin release-reachable?
+  vibe_mirror_refresh >/dev/null 2>&1 || true
+  if desc="$(vibe_sha_is_release "$pin" 2>/dev/null)"; then
+    verified="verified — $desc"
+  else
+    verified="UNVERIFIED — not reachable from any release ref in the canonical mirror"
+  fi
+
+  if [ ! -t 0 ] || [ ! -t 1 ]; then
+    printf 'vibe: %s needs a first-contact trust decision (pin %s, %s).\n' "$root" "$pin" "$verified" >&2
+    printf '      Non-interactive: refusing. Provision it explicitly:\n' >&2
+    printf '        vibe provision --root %s --sha %s\n' "$root" "$pin" >&2
+    return 1
+  fi
+
+  printf '\n' >&2
+  if [ -n "$trusted_sha" ]; then
+    printf 'The harness pin for this project CHANGED since you last trusted it.\n' >&2
+    printf '  trusted: %s\n  new pin: %s  (%s)\n' "$trusted_sha" "$pin" "$verified" >&2
+    if [ -d "$home/repo.git" ]; then
+      git -C "$home/repo.git" log --oneline "$trusted_sha..$pin" 2>/dev/null | head -30 | sed 's/^/    /' >&2 || true
+    fi
+  else
+    printf 'First contact with a vibe project:\n  %s\n' "$root" >&2
+    printf '  harness pin: %s\n  %s\n' "$pin" "$verified" >&2
+  fi
+  case "$verified" in
+    UNVERIFIED*)
+      printf '\n  !! This commit is not from a known release. Only trust it if you\n' >&2
+      printf '     personally reviewed this exact harness checkout.\n' >&2 ;;
+  esac
+  printf '\nTrust this harness version for this project? [y/N]: ' >&2
+  local ans; read -r ans
+  case "$ans" in y|Y|yes|YES) ;; *) printf 'Aborted.\n' >&2; return 1 ;; esac
+
+  # Materialize: mirror first, then (for an UNVERIFIED workspace-only sha the
+  # human just accepted) the workspace submodule objects. git verifies object
+  # hashes on transfer; the sha is what was shown and confirmed.
+  local dest
+  dest="$(vibe_materialize "$pin" "$home/repo.git" 2>/dev/null)" || dest=""
+  if [ -z "$dest" ]; then
+    local wobj="$root/.vibe/harness/.git"
+    [ -e "$wobj" ] || wobj="$root/.git/modules/.vibe/harness"
+    dest="$(vibe_materialize "$pin" "$wobj")" || {
+      printf 'vibe: could not materialize %s from mirror or workspace objects\n' "$pin" >&2
+      return 1
+    }
+  fi
+
+  vibe_record_write "$record" \
+    "sha=$pin" \
+    "project_name=$project_name" \
+    "ws_base=$ws_base" \
+    "mode=normal" \
+    "root=$(cd -- "$root" && pwd -P)"
+  printf '%s\n' "$dest"
+}
+
+# ── provision (non-interactive, exact) ────────────────────────────────────
+# Record trust for CI/cron without a prompt. Values come from argv, not the
+# workspace. Args: root sha project_name ws_base.
+vibe_provision() {
+  local root="$1" sha="$2" project_name="$3" ws_base="$4"
+  case "$sha" in *[!0-9a-f]* | "") printf 'vibe: bad sha\n' >&2; return 1 ;; esac
+  local home; home="$(vibe_store_init)" || return 1
+  local digest record dest
+  digest="$(vibe_checkout_digest "$root")" || return 1
+  record="$home/state/projects/$digest"
+  vibe_mirror_refresh >/dev/null 2>&1 || true
+  dest="$(vibe_materialize "$sha" "$home/repo.git" 2>/dev/null)" || dest=""
+  if [ -z "$dest" ]; then
+    dest="$(vibe_materialize "$sha" "$root/.vibe/harness/.git" 2>/dev/null)" || {
+      printf 'vibe: provision could not materialize %s\n' "$sha" >&2; return 1; }
+  fi
+  vibe_record_write "$record" \
+    "sha=$sha" "project_name=$project_name" "ws_base=$ws_base" \
+    "mode=normal" "root=$(cd -- "$root" && pwd -P)"
+  printf '%s\n' "$dest"
+}
