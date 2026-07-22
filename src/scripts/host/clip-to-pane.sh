@@ -4,20 +4,17 @@
 # the resulting container path into the agent pane — replaces the whole
 # switch-tab / clip / copy / paste dance with one chord.
 #
-# Runs as a tmux run-shell job on the HOST server (socket "vibe"), cwd =
-# repo root (the binding cd's to #{session_path} first). $1 = window id.
+# Runs as a tmux run-shell job on the HOST server, cwd = repo root (the
+# binding cd's to #{session_path} first); run-shell provides TMUX, so
+# plain `tmux` is the right binary/socket (same rule as sidebar/dock).
+# $1 = window id.
 
 set -euo pipefail
 
-socket="vibe"
 window="${1:-}"
 
-vtmux() {
-  tmux -L "$socket" "$@"
-}
-
 note() {
-  vtmux display-message "$1" 2>/dev/null || true
+  tmux display-message "$1" 2>/dev/null || true
 }
 
 if ! out="$(./vibe clip 2>&1)"; then
@@ -33,10 +30,10 @@ fi
 
 # Prefer the pane tui.sh marked as the agent; fall back to the window's
 # active pane (ad-hoc windows never get roles stamped).
-target="$(vtmux list-panes -t "$window" -F '#{pane_id} #{@vibe_role}' 2>/dev/null \
+target="$(tmux list-panes -t "$window" -F '#{pane_id} #{@vibe_role}' 2>/dev/null \
   | awk '$2 == "agent" { print $1; exit }')"
 if [ -z "$target" ]; then
-  target="$(vtmux list-panes -t "$window" -F '#{?pane_active,#{pane_id},}' 2>/dev/null | grep . | head -1)"
+  target="$(tmux list-panes -t "$window" -F '#{?pane_active,#{pane_id},}' 2>/dev/null | grep . | head -1)"
 fi
 if [ -z "$target" ]; then
   note "clip saved ($path) but no pane to type it into"
@@ -45,5 +42,5 @@ fi
 
 # Literal keystrokes, no Enter — the path lands in the agent's prompt for
 # you to submit (or prepend words to).
-vtmux send-keys -t "$target" -l "$path"
+tmux send-keys -t "$target" -l "$path"
 note "clip → $path"

@@ -36,7 +36,9 @@ if [ "$h" -gt 2 ]; then
 else
   prev="$(tmux show-options -pqv -t "$pane" @vibe_dock_h 2>/dev/null)"
   case "$prev" in
-    '' | *[!0-9]*) prev="30%" ;; # never expanded before (or junk): the layout default
+    # Never expanded before (or junk): the layout default — keep in sync
+    # with tui.sh's initial split-window -l '30%' for the host pane.
+    '' | *[!0-9]*) prev="30%" ;;
   esac
   tmux resize-pane -t "$pane" -y "$prev"
 fi

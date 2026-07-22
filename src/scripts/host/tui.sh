@@ -247,7 +247,8 @@ EOF2
   # Host shell as a BOTTOM dock (IDE-terminal style, 2026-07-22 request):
   # under the agent, not beside it. The sidebar splits full-height later,
   # so the dock spans the area right of the sidebar — the VS Code shape.
-  # prefix+t (dock.sh) collapses it to a 1-row strip and back.
+  # prefix+t (dock.sh) collapses it to a 1-row strip and back; the 30%
+  # here is also dock.sh's re-expand fallback — keep the two in sync.
   host_pane="$(vtmux split-window -v -l '30%' -c "$repo_root" -t "$agent_pane" -P -F '#{pane_id}')"
   vtmux set-option -p -t "$host_pane" @vibe_role "host"
   vtmux set-option -p -t "$host_pane" @vibe_title "host"

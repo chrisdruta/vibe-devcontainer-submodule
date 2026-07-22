@@ -5,6 +5,21 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
+- **`vibe tui` internals pass (pre-security-review): per-event `./vibe`
+  execution eliminated, one theme source, cheaper sidebar.** The conf's
+  hooks/bindings now resolve harness scripts through a `@vibe_harness_dir`
+  option tui.sh stamps once at launch (first-owner, like `VIBE_TUI_CONF`)
+  instead of running `$(./vibe __harness-dir)` — a subprocess executing the
+  session-cwd's `./vibe` — on every title change/resize/window event.
+  Palette + state→glyph map moved to `src/config/theme.sh`, the single
+  source for state-render.sh, sidebar.sh, and `vibe ps` (the conf's `@thm`
+  block is its documented lockstep twin); the pane-died corpse mark now
+  flows through state-render.sh too. Sidebar refresh is serial-gated: an
+  idle tick is one tmux round trip (was ~2+S per sidebar), dots/new
+  sessions still show in ≤2s, branch-line changes may take up to 10s.
+  Pick it all up with `vibe tui --fresh` after updating; the reload
+  scrubbers for the long-retired status-line-2 strip are gone, so a live
+  pre-sidebar server should also relaunch rather than prefix+R.
 - **`vibe tui` multi-project quit semantics fixed (two live reports from
   the first two-project session).** Quitting a project's UI while
   another project is on the socket used to teleport that terminal into

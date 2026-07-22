@@ -24,7 +24,7 @@
 #                      on the server; on stamps this window (the hooks
 #                      cover the rest as they're visited)
 #   ensure WINDOW_ID   idempotent: sidebar present in WINDOW iff flag on
-#   render [--once]    the draw loop inside the pane (--once: one frame)
+#   render             the draw loop inside the pane
 #   click PANE ROW [CLIENT]  switch CLIENT to the project drawn on ROW —
 #                      the conf's MouseDown1Pane binding routes sidebar
 #                      clicks here; ROW resolves via @vibe_sidebar_map,
@@ -167,9 +167,6 @@ render) ;;
 esac
 
 # ── render ───────────────────────────────────────────────────────────────
-once=0
-[ "${2:-}" = "--once" ] && once=1
-
 # One palette: theme.sh, beside the tmux conf (whose @thm block is its
 # lockstep twin). Sourced once at launch — a palette change lands on the
 # next toggle, which is fine.
@@ -356,7 +353,6 @@ tick=0
 printf '\033[?25l'
 trap 'printf "\033[?25h"' EXIT
 frame
-[ "$once" = "1" ] && exit 0
 while :; do
   sleep 2
   # ONE round trip per idle tick: die-check and change detection together.
