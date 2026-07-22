@@ -1,147 +1,168 @@
 #!/usr/bin/env bash
 #
-# vibe update [TAG] — docs/updating.md's recommended flow as one command:
-# fetch tags in the harness submodule, show what the move changes (CHANGELOG
-# delta, diff stat), check out the target tag, and STAGE the pin move in the
-# consuming repo. Deliberately never commits and never rebuilds: the pin model
-# is review-the-diff, and install.sh set the precedent (stage only, the human
-# commits). Runs identically on the host (`vibe update`) and inside the
-# container (agents: `bash .vibe/harness/scripts/update.sh`) — only
-# the rebuild handoff differs, because rebuilds need the host's docker.
-# Host-side callers may be macOS: keep this bash-3.2 compatible.
+# vibe update [TAG] — move the harness pin, through the HOST-OWNED MIRROR only.
+#
+# Host root-of-trust (sol C-2): the workspace submodule .git is container-
+# writable, so this NEVER fetches, checks out, or runs porcelain against it —
+# a container-planted post-checkout / credential-helper / filter would execute
+# on the host. Instead it operates entirely on ~/.vibe/repo.git (the canonical
+# mirror), shows the diff from there, stages the superproject gitlink with a
+# narrow `update-index --cacheinfo` (no submodule checkout, no hook surface),
+# and materializes + trusts the new version. Review-the-diff, stage-only: the
+# human still commits and rebuilds.
+#
+# Runs on the host (`vibe update`) and, staging-only, inside the container.
+# Host-side: bash-3.2 (stock macOS) only.
 set -euo pipefail
 
-# Repo root: handed over by the vibe launcher, or (direct invocation) the
-# shared $PWD ancestor walk — one implementation for both callers.
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=repo-root.sh disable=SC1091
 . "$script_dir/repo-root.sh"
+# shellcheck source=host/store.sh disable=SC1091
+. "$script_dir/host/store.sh"
+
+in_container=""
+[ -e /.dockerenv ] && in_container=1
+[ -n "$in_container" ] || vibe_sanitize_env
+
 repo_root="${VIBE_REPO_ROOT:-}"
-if [ -z "$repo_root" ]; then
-  repo_root="$(find_repo_root_from_pwd || true)"
-fi
+[ -n "$repo_root" ] || repo_root="$(find_repo_root_from_pwd || true)"
 if [ -z "$repo_root" ]; then
   echo "No .vibe/compose.yaml (or legacy .devcontainer/) found above: $PWD" >&2
   exit 1
 fi
-
-# Works on both layouts: the pin lives at .vibe/harness (current) or
-# .devcontainer/harness (legacy — updating across the engine swap is
-# exactly when this script must still run there).
 vd="$(vibe_dir_name_for_root "$repo_root")"
-sub="$repo_root/$vd/harness"
-if ! git -C "$sub" rev-parse --git-dir >/dev/null 2>&1; then
-  echo "No harness submodule at $sub" >&2
-  echo "Initialize it first: git submodule update --init $vd/harness" >&2
-  exit 1
+
+# The currently-committed pin (as DATA — ls-tree/ls-files, never porcelain).
+old_sha="$(vibe_read_pin "$repo_root" 2>/dev/null || true)"
+
+# ── in-container: staging-only, no store, no mirror ────────────────────────
+# The overmounted harness tree has no .git and may not be a submodule checkout,
+# so we can't run submodule git here. Stage the gitlink the human names; trust +
+# materialize land on their next host-side vibe command.
+if [ -n "$in_container" ]; then
+  target="${1:-}"
+  if [ -z "$target" ]; then
+    echo "In-container update needs an explicit TAG or SHA (no mirror in here)." >&2
+    echo "  vibe update <tag-or-sha>   # stages the gitlink; host trusts it next run" >&2
+    exit 2
+  fi
+  # Resolve a sha from the workspace submodule objects as DATA only (rev-parse
+  # reads objects; it does not check out or run hooks).
+  sub="$repo_root/$vd/harness"
+  new_sha="$(git -C "$sub" rev-parse -q --verify "$target^{commit}" 2>/dev/null || true)"
+  [ -n "$new_sha" ] || { echo "Not a known tag/ref in the harness objects: $target" >&2; exit 1; }
+  git -C "$repo_root" update-index --cacheinfo "160000,$new_sha,$vd/harness" 2>/dev/null \
+    || git -C "$repo_root" update-index --add --cacheinfo "160000,$new_sha,$vd/harness"
+  echo "Staged gitlink $vd/harness -> $new_sha (in-container)."
+  echo "On the host, run 'vibe update' or just 'vibe' here to review, trust, and rebuild."
+  exit 0
 fi
 
-old_sha="$(git -C "$sub" rev-parse HEAD)"
-old_desc="$(git -C "$sub" describe --tags 2>/dev/null || git -C "$sub" rev-parse --short HEAD)"
-
-# Offline is a degraded mode, not a failure: continue with already-fetched
-# tags (matching doctor's offline-only staleness check), but say so.
-if ! git -C "$sub" fetch --tags --quiet origin 2>/dev/null; then
-  echo "warning: tag fetch failed (offline?) — using already-fetched tags" >&2
+# ── host: operate on the canonical mirror ──────────────────────────────────
+home="$(vibe_store_init)" || exit 1
+if ! vibe_canonical_remote >/dev/null 2>&1; then
+  echo "No canonical harness remote recorded. Bootstrap the store first:" >&2
+  echo "  $repo_root/$vd/harness/install.sh --self" >&2
+  exit 1
+fi
+mirror="$home/repo.git"
+if ! vibe_mirror_refresh; then
+  echo "warning: mirror refresh failed (offline?) — using already-fetched objects" >&2
 fi
 
 target="${1:-}"
 if [ -z "$target" ]; then
-  target="$(git -C "$sub" tag --list 'v*' --sort=-v:refname | head -n 1)"
-  if [ -z "$target" ]; then
-    echo "No version tags known in the harness submodule." >&2
-    exit 1
-  fi
+  target="$(git -C "$mirror" tag --list 'v*' --sort=-v:refname 2>/dev/null | head -n 1)"
+  [ -n "$target" ] || { echo "No version tags in the canonical mirror." >&2; exit 1; }
 fi
-if ! new_sha="$(git -C "$sub" rev-parse -q --verify "$target^{commit}")"; then
-  echo "Not a known tag or ref: $target" >&2
-  echo "Available: git -C $vd/harness tag --list --sort=-v:refname" >&2
+new_sha="$(git -C "$mirror" rev-parse -q --verify "$target^{commit}" 2>/dev/null || true)"
+[ -n "$new_sha" ] || {
+  echo "Not a known tag or ref in the canonical mirror: $target" >&2
+  echo "Available: git -C $mirror tag --list --sort=-v:refname" >&2
   exit 1
-fi
+}
 
 if [ "$new_sha" = "$old_sha" ]; then
-  echo "Already at $target ($old_desc) — nothing to do."
+  echo "Already at $target ($old_sha) — nothing to do."
   exit 0
 fi
 
-echo
-echo "harness: $old_desc -> $target"
-
-rollback=""
-if git -C "$sub" merge-base --is-ancestor "$new_sha" "$old_sha" 2>/dev/null; then
-  rollback=1
-fi
-
-# CHANGELOG delta: the newer side's sections down to (excluding) the older
-# pin's release heading — on a rollback that is what you are LEAVING.
-if [ -n "$rollback" ]; then
-  echo "(rollback — the CHANGELOG sections below are what you are leaving)"
-  show_ref="$old_sha"
-  boundary="$(git -C "$sub" describe --tags --abbrev=0 "$new_sha" 2>/dev/null || echo '')"
+# Publisher authentication: the target must be release-reachable in the mirror.
+if desc="$(vibe_sha_is_release "$new_sha" 2>/dev/null)"; then
+  verified="verified — $desc"
 else
-  show_ref="$target"
-  boundary="$(git -C "$sub" describe --tags --abbrev=0 2>/dev/null || echo '')"
+  verified="UNVERIFIED — not reachable from a release ref in the canonical mirror"
 fi
+
 echo
-git -C "$sub" show "$show_ref:CHANGELOG.md" 2>/dev/null | awk -v tag="$boundary" '
-  /^## / { started = 1 }
-  started && tag != "" && substr($0, 1, length("## " tag " ")) == "## " tag " " { exit }
-  started {
-    print
-    if (++printed >= 120) { print "[... truncated — full history in CHANGELOG.md]"; exit }
-  }
-'
+echo "harness: ${old_sha:-<none>} -> $new_sha ($target)"
+echo "publisher: $verified"
+echo
 
-echo "Files changed:"
-git -C "$sub" diff --stat "$old_sha" "$new_sha" -- | tail -n 40
+# CHANGELOG delta + diff, ALL from the mirror (never the workspace).
+if [ -n "$old_sha" ] && git -C "$mirror" cat-file -e "$old_sha^{commit}" 2>/dev/null; then
+  echo "Changes ($old_sha..$new_sha):"
+  git -C "$mirror" log --oneline "$old_sha..$new_sha" 2>/dev/null | head -40 | sed 's/^/  /'
+  echo
+  echo "Files changed:"
+  git -C "$mirror" diff --stat "$old_sha" "$new_sha" -- 2>/dev/null | tail -n 40
+else
+  echo "(no local base object for $old_sha — showing the target's changelog head)"
+  git -C "$mirror" show "$new_sha:CHANGELOG.md" 2>/dev/null | head -60
+fi
 
-git -C "$sub" checkout --quiet "$target"
-git -C "$repo_root" add "$vd/harness"
+case "$verified" in
+  UNVERIFIED*)
+    echo
+    echo "!! $target is not reachable from a known release ref. Only continue if you"
+    echo "   trust this exact commit."
+    ;;
+esac
 
-changed="$(git -C "$sub" diff --name-only "$old_sha" "$new_sha" --)"
+if [ -t 0 ] && [ -t 1 ]; then
+  printf '\nStage this pin move and trust it? [y/N]: '
+  read -r ans
+  case "$ans" in y|Y|yes|YES) ;; *) echo "Aborted (nothing staged)."; exit 1 ;; esac
+else
+  echo
+  echo "Non-interactive: not staging. Use 'vibe provision --sha $new_sha' to trust exactly." >&2
+  exit 1
+fi
+
+# Stage the gitlink directly — no submodule checkout, no hook surface.
+git -C "$repo_root" update-index --cacheinfo "160000,$new_sha,$vd/harness" 2>/dev/null \
+  || git -C "$repo_root" update-index --add --cacheinfo "160000,$new_sha,$vd/harness"
+
+# Materialize + trust the new version now (review already happened above).
+dest="$(vibe_materialize "$new_sha" "$mirror" 2>/dev/null || true)"
+[ -n "$dest" ] || { echo "warning: could not materialize $new_sha from the mirror" >&2; }
+digest="$(vibe_checkout_digest "$repo_root")"
+record="$(vibe_record_path "$digest")"
+pname="$(vibe_record_get "$record" project_name 2>/dev/null || true)"
+[ -n "$pname" ] || pname="$(vibe_project_slug "$repo_root")-$(vibe_checkout_suffix "$repo_root")"
+vibe_record_write "$record" \
+  "sha=$new_sha" "project_name=$pname" "ws_base=$(basename -- "$repo_root")" \
+  "mode=normal" "root=$(cd -- "$repo_root" && pwd -P)"
+
+# What a rebuild picks up — decide from the mirror diff, not the workspace.
+changed="$(git -C "$mirror" diff --name-only "$old_sha" "$new_sha" -- 2>/dev/null || true)"
 rebuild=""
 if printf '%s\n' "$changed" | grep -qE '^(src/)?Dockerfile$'; then
   rebuild=required
 elif printf '%s\n' "$changed" | grep -qE '^(src/)?(scripts/|config/|compose/)'; then
   rebuild=recommended
 fi
-templates_changed=""
-if printf '%s\n' "$changed" | grep -qE '^(src/)?templates/'; then
-  templates_changed=1
-fi
-in_container=""
-if [ -e /.dockerenv ]; then
-  in_container=1
-fi
 
 echo
-echo "Staged (not committed). Next:"
-echo "  git diff --cached --submodule    # review the move"
-echo "  git commit -m \"Update vibe harness to $target\""
-echo "  ./$vd/vibe doctor"
-if [ -n "$templates_changed" ]; then
-  echo
-  echo "templates/ changed between these pins — review the project-owned files"
-  echo "against them (docs/updating.md -> \"Agent-driven update\" covers the merge)."
-  echo "(.claude/settings.json hook registrations merge themselves on the next"
-  echo " rebuild/bootstrap — additive only; review that diff like this one.)"
-fi
+echo "Staged the pin move and trusted $new_sha. Next:"
+echo "  git -C '$repo_root' diff --cached --submodule    # review the move"
+echo "  git -C '$repo_root' commit -m \"Update vibe harness to $target\""
+echo "  vibe doctor"
 if [ "$rebuild" = "required" ]; then
   echo
-  if [ -n "$in_container" ]; then
-    echo "Dockerfile changed: rebuild REQUIRED — on the HOST (it cannot run in here):"
-  else
-    echo "Dockerfile changed: rebuild REQUIRED:"
-  fi
-  echo "  ./$vd/vibe rebuild"
+  echo "Dockerfile changed: rebuild REQUIRED:  vibe rebuild"
 elif [ "$rebuild" = "recommended" ]; then
   echo
-  echo "Harness scripts/config changed: checkout copies apply immediately, but"
-  echo "the copies baked into the image (tmux conf, prefix+i viewer) refresh"
-  if [ -n "$in_container" ]; then
-    echo "only on rebuild — on the HOST (it cannot run in here):"
-  else
-    echo "only on rebuild:"
-  fi
-  echo "  ./$vd/vibe rebuild"
+  echo "Harness scripts/config changed: rebuild to refresh baked copies:  vibe rebuild"
 fi

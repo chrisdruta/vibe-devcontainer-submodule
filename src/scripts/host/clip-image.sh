@@ -50,13 +50,29 @@ dest_dir="${dest_dir%/}"
 file_name="clip-$(date +%Y%m%d-%H%M%S).png"
 if [ -n "$dest_dir" ]; then
   # Workspace mode: the repo is bind-mounted, so writing on the host is enough.
-  mkdir -p "$repo_root/$dest_dir"
-  # The `..` check above is lexical; a repo-controlled symlink (e.g.
-  # .captures -> ../../.ssh) would still let mkdir/write escape. Resolve the
-  # real directory with `pwd -P` (POSIX, portable) and confirm it stays under
-  # the real repo root; then refuse an existing symlink at the target file so a
-  # pre-planted link can't redirect the write.
+  # L-1 fix: the `..` check above is lexical, and a pre-planted symlink
+  # component (e.g. .captures -> ../../.ssh) would let `mkdir -p` FOLLOW it and
+  # create/write outside the repo — so verify containment BEFORE any mkdir.
+  # Resolve the deepest already-existing ancestor of the target and confirm it
+  # stays under the real repo root; only then create the (necessarily fresh,
+  # non-symlink) remaining components.
   repo_root_real="$(cd "$repo_root" && pwd -P)"
+  existing="$repo_root/$dest_dir"
+  while [ ! -e "$existing" ]; do existing="$(dirname -- "$existing")"; done
+  if [ -L "$existing" ]; then
+    echo "Destination path contains a symlink: $dest_dir" >&2
+    exit 2
+  fi
+  existing_real="$(cd "$existing" 2>/dev/null && pwd -P)" || {
+    echo "Destination path is not a usable directory: $dest_dir" >&2; exit 2; }
+  case "$existing_real" in
+    "$repo_root_real" | "$repo_root_real"/*) : ;;
+    *)
+      echo "Destination resolves outside the workspace (symlink?): $dest_dir" >&2
+      exit 2
+      ;;
+  esac
+  mkdir -p "$repo_root/$dest_dir"
   dest_real="$(cd "$repo_root/$dest_dir" && pwd -P)"
   case "$dest_real" in
     "$repo_root_real" | "$repo_root_real"/*) : ;;
