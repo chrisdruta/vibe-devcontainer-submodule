@@ -148,7 +148,7 @@ if [ -f /.dockerenv ] && [ -z "${VIBE_SKIP_CONTAINER_DISPATCH:-}" ]; then
     shell) exec bash "$@" ;;
     *)
       echo "vibe $command_name needs docker and runs on the host — this is a container shell." >&2
-      echo "(container-side commands work from here: show review agent attach run exec doctor ps)" >&2
+      echo "(container-side commands work from here: show review agent attach shell run exec doctor ps bootstrap)" >&2
       exit 1
       ;;
   esac
@@ -169,6 +169,10 @@ fi
 
 ws_base="$(basename -- "$repo_root")"
 workdir="/workspaces/$ws_base"
+# Container-relative path to the harness scripts, used by every cexec site.
+# The .vibe literal is correct by construction: non-.vibe layouts were
+# rejected above (the legacy-layout gate).
+cscripts=".vibe/harness/src/scripts"
 
 # Per-checkout project identity (top finding of the 2026-07 external
 # review): a basename-only project name collides across same-named
@@ -317,10 +321,10 @@ do_up() {
   fi
   if [[ "$cid" != "$pre_cid" ]]; then
     if ! docker exec "$cid" test -f /var/tmp/.vibe-post-created 2>/dev/null; then
-      cexec "$cid" bash .vibe/harness/src/scripts/post-create.sh 1>&2
+      cexec "$cid" bash "$cscripts"/post-create.sh 1>&2
       docker exec "$cid" touch /var/tmp/.vibe-post-created
     fi
-    cexec "$cid" bash .vibe/harness/src/scripts/post-start.sh 1>&2
+    cexec "$cid" bash "$cscripts"/post-start.sh 1>&2
   fi
 }
 
@@ -393,7 +397,7 @@ case "$command_name" in
     ;;
   attach)
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/agent-entry.sh attach "$@"
+    cexec "$(container_id)" bash "$cscripts"/agent-entry.sh attach "$@"
     ;;
   shell)
     ensure_up
@@ -404,24 +408,24 @@ case "$command_name" in
     # All agent logic (flag parsing, DEV_AGENT_CMD resolution, tmux
     # wrapping) lives container-side in agent-entry.sh, which gets real
     # argv — no payload strings, no re-quoting at this boundary.
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/agent-entry.sh agent "$@"
+    cexec "$(container_id)" bash "$cscripts"/agent-entry.sh agent "$@"
     ;;
   doctor)
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/doctor.sh "$@"
+    cexec "$(container_id)" bash "$cscripts"/doctor.sh "$@"
     ;;
   ps)
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/ps.sh "$@"
+    cexec "$(container_id)" bash "$cscripts"/ps.sh "$@"
     ;;
   bootstrap)
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/post-create.sh "$@"
+    cexec "$(container_id)" bash "$cscripts"/post-create.sh "$@"
     ;;
   run)
     (($#)) || { echo "Usage: vibe run COMMAND [ARGUMENT ...]" >&2; exit 2; }
     ensure_up
-    cexec "$(container_id)" .vibe/harness/src/scripts/env-run.sh "$@"
+    cexec "$(container_id)" "$cscripts"/env-run.sh "$@"
     ;;
   exec)
     (($#)) || { echo "Usage: vibe exec COMMAND [ARGUMENT ...]" >&2; exit 2; }
@@ -430,7 +434,7 @@ case "$command_name" in
     ;;
   show)
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/show-image.sh "$@"
+    cexec "$(container_id)" bash "$cscripts"/show-image.sh "$@"
     ;;
   review)
     # yazi in the INVOKING terminal (prefix+i inside the agent session
@@ -439,7 +443,7 @@ case "$command_name" in
     # .review-decisions.jsonl beside the images. The project-owned
     # .vibe/yazi/ layers preferences and rebinds on top.
     ensure_up
-    cexec "$(container_id)" bash .vibe/harness/src/scripts/review.sh "$@"
+    cexec "$(container_id)" bash "$cscripts"/review.sh "$@"
     ;;
   clip)
     # Host-side: grabs the OS clipboard image; container /tmp by default,
@@ -472,7 +476,7 @@ case "$command_name" in
         bash "$self_dir/src/scripts/host/tui.sh" "$repo_root" "$ws_base" "$self_dir" "$project_name" --kill
         cid="$(container_id)" || cid=""
         if [ -n "$cid" ]; then
-          cexec "$cid" bash .vibe/harness/src/scripts/agent-entry.sh reap-nested || true
+          cexec "$cid" bash "$cscripts"/agent-entry.sh reap-nested || true
         fi
         if [ "$1" = "--kill" ]; then
           exit 0

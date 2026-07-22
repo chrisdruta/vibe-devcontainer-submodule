@@ -88,7 +88,7 @@ row() { # NAME STATE WHEN EXTRA — pad plain text, colorize after, so the
 }
 
 proj=""
-[ -r "$REPO_ROOT/.vibe/.project-id" ] && proj=" $c_dim($(cat "$REPO_ROOT/.vibe/.project-id"))$c_off"
+[ -r "$VIBE_DIR/.project-id" ] && proj=" $c_dim($(cat "$VIBE_DIR/.project-id"))$c_off"
 printf '%sAGENTS%s%s\n' "$c_bold" "$c_off" "$proj"
 
 if [ "${#candidates[@]}" -eq 0 ]; then
