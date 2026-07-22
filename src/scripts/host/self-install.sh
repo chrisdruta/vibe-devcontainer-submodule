@@ -19,6 +19,9 @@ self_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 harness_dir="$(cd -- "$self_dir/../../.." && pwd)"
 # shellcheck source=store.sh disable=SC1091
 . "$self_dir/store.sh"
+# repo-root.sh carries the identity helpers (vibe_project_slug / _checkout_suffix).
+# shellcheck source=../repo-root.sh disable=SC1091
+. "$self_dir/../repo-root.sh"
 
 remote=""
 project_root=""

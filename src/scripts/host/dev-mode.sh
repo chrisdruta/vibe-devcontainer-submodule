@@ -26,6 +26,9 @@ fi
 
 # shellcheck source=store.sh disable=SC1091
 . "$harness_dir/src/scripts/host/store.sh"
+# repo-root.sh carries the identity helpers (vibe_project_slug / _checkout_suffix).
+# shellcheck source=../repo-root.sh disable=SC1091
+. "$harness_dir/src/scripts/repo-root.sh"
 vibe_sanitize_env
 
 home="$(vibe_store_init)" || exit 1
