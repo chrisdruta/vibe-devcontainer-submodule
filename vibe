@@ -65,6 +65,57 @@ if [ "${1:-}" = "update" ]; then
   VIBE_REPO_ROOT="$repo_root" exec bash "$self_dir/src/scripts/update.sh" "$@"
 fi
 
+# ── host-only store verbs (git/store only — no docker) ─────────────────────
+# provision: non-interactive exact trust (CI/cron). self-update: refresh the
+# host mirror + reinstall the shim. dev: manage per-project dev mode (host
+# execution still runs a materialized snapshot; `dev sync` re-snapshots the
+# working tree). All refuse inside the container.
+case "${1:-}" in
+  provision | self-update | dev)
+    if [ -f /.dockerenv ]; then
+      echo "vibe ${1} is a host-only store command." >&2
+      exit 1
+    fi
+    verb="$1"; shift
+    case "$verb" in
+      provision)
+        p_root="$repo_root"; p_sha=""; p_name=""; p_ws=""
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --root) p_root="$2"; shift 2 ;;
+            --sha)  p_sha="$2"; shift 2 ;;
+            --name) p_name="$2"; shift 2 ;;
+            --ws)   p_ws="$2"; shift 2 ;;
+            *) echo "vibe provision: unknown arg: $1" >&2; exit 2 ;;
+          esac
+        done
+        [ -n "$p_root" ] || { echo "vibe provision: --root required (or run inside a project)" >&2; exit 2; }
+        [ -n "$p_sha" ] || p_sha="$(vibe_read_pin "$p_root" || true)"
+        [ -n "$p_sha" ] || { echo "vibe provision: --sha required (no readable pin)" >&2; exit 2; }
+        [ -n "$p_ws" ] || p_ws="$(basename -- "$p_root")"
+        [ -n "$p_name" ] || p_name="$(vibe_project_slug "$p_root")-$(vibe_checkout_suffix "$p_root")"
+        vibe_provision "$p_root" "$p_sha" "$p_name" "$p_ws" >/dev/null || exit 1
+        echo "Provisioned trust for $p_root at $p_sha"
+        exit 0
+        ;;
+      self-update)
+        vibe_mirror_refresh || true
+        home="$(vibe_store_home)"
+        if [ -f "$self_dir/src/templates/shim" ]; then
+          cp -f "$self_dir/src/templates/shim" "$home/bin/vibe" && chmod 755 "$home/bin/vibe"
+          echo "Shim refreshed: $home/bin/vibe"
+        fi
+        echo "Mirror refreshed. Move a project's pin with: vibe update"
+        exit 0
+        ;;
+      dev)
+        [ -n "$repo_root" ] || { echo "vibe dev: run inside a project" >&2; exit 1; }
+        exec bash "$self_dir/src/scripts/host/dev-mode.sh" "$repo_root" "$self_dir" "${1:-}"
+        ;;
+    esac
+    ;;
+esac
+
 # DEPRECATED compat plumbing: pre-2026-07-22 tmux-tui.conf hooks resolve
 # scripts via `$(./vibe __harness-dir)` per event; current confs read the
 # @vibe_harness_dir option tui.sh stamps once. Live servers on older pins
