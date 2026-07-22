@@ -50,25 +50,36 @@ dev_source() {
 }
 
 # Snapshot the WORKING TREE (incl. uncommitted edits) of the dev source into an
-# immutable version dir. Builds a tree object from a throwaway index so the real
-# index is untouched, commits it (orphan; identity forced so a sanitized env
-# with no user.name still works), then materializes that commit from the source's
-# own object store — same hardening as any other version (fsck, symlink
-# rejection, manifest, freeze).
+# immutable version dir. Building the tree through the source repo's own git
+# would run its .gitattributes clean filters (filter.<name>.clean) and hooks —
+# both container-writable, both host code execution (sol C4). Instead, point a
+# FRESH, empty GIT_DIR at the worktree: with no filter drivers or hooks defined
+# in that clean config, .gitattributes filter assignments are silently skipped
+# and no hook can fire. The resulting orphan commit's objects live in the fresh
+# dir; materialize from there (fsck, symlink rejection, manifest, freeze).
 snapshot_worktree() {
   local src; src="$(dev_source)"
   [ -e "$src/.git" ] || { echo "vibe dev: no git checkout at $src" >&2; return 1; }
-  local tmpidx tree commit
-  tmpidx="$(vibe_mktemp "$home/state/lock")" || return 1
-  rm -f "$tmpidx"   # git wants to create it fresh
-  if ! GIT_INDEX_FILE="$tmpidx" vibe_git -C "$src" add -A 2>/dev/null; then
-    rm -f "$tmpidx" "$tmpidx.lock"; return 1; fi
-  tree="$(GIT_INDEX_FILE="$tmpidx" vibe_git -C "$src" write-tree 2>/dev/null)" || { rm -f "$tmpidx" "$tmpidx.lock"; return 1; }
-  rm -f "$tmpidx" "$tmpidx.lock"
-  commit="$(vibe_git -C "$src" \
-    -c user.name='vibe dev' -c user.email='dev@vibe.local' \
-    commit-tree "$tree" -m 'vibe dev snapshot' 2>/dev/null)" || return 1
-  vibe_materialize "$commit" "$src/.git"
+  local work fg tmpidx tree commit
+  work="$(vibe_mktemp_dir "$home/state/lock")" || return 1
+  fg="$work/g"
+  # A clean bootstrap git for tree-building only — no system/global config, no
+  # hooks, no fsmonitor, no filter drivers.
+  cleangit() {
+    GIT_DIR="$fg" GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+      git -c core.hooksPath=/dev/null -c core.fsmonitor= \
+          -c protocol.ext.allow=never "$@"
+  }
+  if ! cleangit init -q; then rm -rf "$work"; return 1; fi
+  tmpidx="$fg/vibe-index"
+  if ! GIT_WORK_TREE="$src" GIT_INDEX_FILE="$tmpidx" cleangit add -A 2>/dev/null; then
+    rm -rf "$work"; return 1; fi
+  tree="$(GIT_INDEX_FILE="$tmpidx" cleangit write-tree 2>/dev/null)" || { rm -rf "$work"; return 1; }
+  commit="$(cleangit -c user.name='vibe dev' -c user.email='dev@vibe.local' \
+    commit-tree "$tree" -m 'vibe dev snapshot' 2>/dev/null)" || { rm -rf "$work"; return 1; }
+  local dest; dest="$(vibe_materialize "$commit" "$fg")" || { rm -rf "$work"; return 1; }
+  rm -rf "$work"
+  printf '%s\n' "$dest"
 }
 
 case "$sub" in

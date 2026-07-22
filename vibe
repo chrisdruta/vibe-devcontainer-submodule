@@ -347,6 +347,12 @@ ensure_compose_gate() {
   compose_gated=1
 }
 
+# Every daemon invocation sets the SAME VIBE_* vars and the SAME --env-file
+# /dev/null and feeds the SAME frozen snapshot files the gate enforced, all in
+# this one already-sanitized process — so the model compose renders here is
+# byte-identical to the one that passed enforcement; a container-writable .env
+# cannot shift it between check and run (sol C3). The host's docker client env
+# (DOCKER_HOST/CONTEXT/…) is preserved. The unique snapshot dir is cleaned on exit.
 compose() {
   ensure_compose_gate
   VIBE_PROJECT_NAME="$project_name" \
@@ -358,10 +364,13 @@ compose() {
   "${compose_bin[@]}" \
     --project-name "$project_name" \
     --project-directory "$repo_root" \
+    --env-file /dev/null \
     -f "$self_dir/src/compose/base.yaml" \
     -f "$VIBE_SNAPSHOT_COMPOSE" \
     "$@"
 }
+# Clean the per-invocation snapshot dir when the launcher exits.
+trap '[ -n "${VIBE_SNAPSHOT_DIR:-}" ] && rm -rf "$VIBE_SNAPSHOT_DIR" 2>/dev/null || true' EXIT
 
 # The image chain: the build-only `base` service produces the shared
 # harness image; a project image extension (.vibe/Dockerfile, declared in
