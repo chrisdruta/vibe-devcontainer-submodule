@@ -19,13 +19,21 @@
 set -euo pipefail
 
 if [ "$#" -lt 3 ]; then
-  echo "Usage: clip-image.sh REPO_ROOT DEST_DIR_OR_EMPTY CONTAINER_ID_OR_EMPTY" >&2
-  echo "(normally invoked via: vibe clip [DIR])" >&2
+  echo "Usage: clip-image.sh REPO_ROOT DEST_DIR_OR_EMPTY CONTAINER_ID_OR_EMPTY [--path-only]" >&2
+  echo "(normally invoked via: vibe clip [--path-only] [DIR])" >&2
   exit 2
 fi
 repo_root="$1"
 dest_dir="$2"
 container="$3"
+path_only="${4:-}"
+
+# Human-facing lines: stdout normally; stderr in --path-only mode, where
+# stdout carries exactly one machine-readable line (the container path —
+# clip-to-pane.sh consumes it; no stdout-format scraping).
+human() {
+  if [ -n "$path_only" ]; then echo "$@" >&2; else echo "$@"; fi
+}
 
 case "$dest_dir" in
   /*)
@@ -136,11 +144,18 @@ if [ -z "$dest_dir" ]; then
   base64 <"$host_png" | docker exec -i -u vscode -e "CLIP_PATH=$container_path" \
     "$container" bash -c 'base64 -d >"$CLIP_PATH"'
 else
-  echo "Saved: $dest_dir/$file_name"
+  human "Saved: $dest_dir/$file_name"
 fi
 
-echo "In the container: $container_path"
+human "In the container: $container_path"
 
+if [ -n "$path_only" ]; then
+  printf '%s\n' "$container_path"
+  exit 0
+fi
+
+# QoL for the interactive flow only: the path replaces the image on the
+# host clipboard so the next paste in an agent prompt is the path itself.
 if command -v clip.exe >/dev/null 2>&1; then
   printf '%s' "$container_path" | clip.exe && echo "(path copied to clipboard)"
 elif command -v pbcopy >/dev/null 2>&1; then

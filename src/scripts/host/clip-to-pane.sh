@@ -17,16 +17,22 @@ note() {
   tmux display-message "$1" 2>/dev/null || true
 }
 
-if ! out="$(./vibe clip 2>&1)"; then
+# --path-only: on success the LAST stdout line is exactly the container
+# path (human chatter goes to stderr; 2>&1 folds it in only so a failure
+# toast can show the real error line).
+if ! out="$(./vibe clip --path-only 2>&1)"; then
   last_line="$(printf '%s\n' "$out" | tail -1)"
   note "vibe clip: ${last_line:-failed}"
   exit 0
 fi
-path="$(printf '%s\n' "$out" | sed -n 's/^In the container: //p' | tail -1)"
-if [ -z "$path" ]; then
-  note "vibe clip: no container path in output"
-  exit 0
-fi
+path="$(printf '%s\n' "$out" | tail -1)"
+case "$path" in
+  /*) ;;
+  *)
+    note "vibe clip: no container path in output"
+    exit 0
+    ;;
+esac
 
 # Prefer the pane tui.sh marked as the agent; fall back to the window's
 # active pane (ad-hoc windows never get roles stamped).

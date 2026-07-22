@@ -401,12 +401,19 @@ case "$command_name" in
   clip)
     # Host-side: grabs the OS clipboard image; container /tmp by default,
     # or a workspace-relative DIR (writes straight to the bind mount — no
-    # running container needed).
+    # running container needed). --path-only is the machine mode used by
+    # clip-to-pane.sh (prefix+v): stdout carries exactly the container
+    # path, human chatter moves to stderr, no clipboard write-back.
+    path_only=""
+    if [ "${1:-}" = "--path-only" ]; then
+      path_only="--path-only"
+      shift
+    fi
     if [ -n "${1:-}" ]; then
-      exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "$1" ""
+      exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "$1" "" "$path_only"
     else
       ensure_up
-      exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "" "$(container_id)"
+      exec bash "$self_dir/src/scripts/host/clip-image.sh" "$repo_root" "" "$(container_id)" "$path_only"
     fi
     ;;
   tui | ui)
