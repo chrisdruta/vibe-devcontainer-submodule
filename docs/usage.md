@@ -158,6 +158,7 @@ them in WT settings or use `prefix+arrows` / `Alt+1..9` instead):
 | `prefix Space` | palette: agent/codex/shell/services windows, switch project, git popup, doctor, detach/quit |
 | `prefix v` | `vibe clip` and type the container path into the agent pane |
 | `prefix g` | host git popup in the repo root (lazygit when installed) |
+| `prefix o` | switch project — session tree of everything on the vibe socket |
 | `prefix r` | respawn a dead agent pane (it stays visible on exit) |
 | `prefix d` | detach — everything keeps running; `vibe tui` reattaches |
 | `prefix Q` | quit the UI session (asks first; agents keep running) |

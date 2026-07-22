@@ -5,12 +5,15 @@ Consumers pin a commit; tags mark intentional upgrade points
 
 ## Unreleased
 
-- **New: "switch project" in the `vibe tui` palette.** `prefix+Space o`
-  opens tmux's session tree (`choose-tree -Zs`) — the project switcher
-  for multi-project use, live-sessions-only by design (no registry:
-  you can switch to any project whose tui has been started). Docs also
-  catch up on the two remaining `tmux-ui.conf` → `tmux-tui.conf` rename
-  stragglers in usage.md.
+- **New: "switch project" in the `vibe tui` palette and on `prefix o`.**
+  Both open tmux's session tree (`choose-tree -Zs`) — the project
+  switcher for multi-project use, live-sessions-only by design (no
+  registry: you can switch to any project whose tui has been started).
+  The direct chord overrides tmux's default `prefix o` (rotate-pane —
+  Alt+arrows cover pane movement, and the default's only observed
+  effect was masquerading as a broken picker during the first live
+  two-project session). Docs also catch up on the two remaining
+  `tmux-ui.conf` → `tmux-tui.conf` rename stragglers in usage.md.
 - **New: cross-project agents strip in `vibe tui` (host-side, no
   rebuild).** While a second project session exists on the `vibe` socket,
   a second status line lists every project with its agents' state dots —
