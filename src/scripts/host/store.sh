@@ -930,7 +930,9 @@ vibe_compose_gate() {
   if [ -n "$rec_hash" ] && [ "$rec_hash" != "$cur_hash" ]; then
     printf '\nThe project compose config changed since it was last trusted.\n' >&2
     [ -f "$prev" ] && { diff -u "$prev" "$rendered" >&2 || true; }
-    if [ -t 0 ] && [ -t 1 ]; then
+    # stdin + stderr, not stdout: the prompt I/O is stderr/stdin, and stdout
+    # may legitimately be redirected (e.g. `vibe config > merged.yaml`).
+    if [ -t 0 ] && [ -t 2 ]; then
       printf 'Trust the new compose config for this project? [y/N]: ' >&2
       local ans; read -r ans
       case "$ans" in y|Y|yes|YES) ;; *) printf 'Aborted.\n' >&2; rm -rf "$snap"; return 1 ;; esac
@@ -1016,7 +1018,10 @@ vibe_first_contact() {
     verified="UNVERIFIED — not reachable from any release ref in the canonical mirror"
   fi
 
-  if [ ! -t 0 ] || [ ! -t 1 ]; then
+  # Interactivity = stdin + stderr, never stdout: every caller invokes this
+  # function inside $(...) to capture the version path, so stdout is a pipe
+  # by construction; the prompt writes to stderr and reads stdin.
+  if [ ! -t 0 ] || [ ! -t 2 ]; then
     printf 'vibe: %s needs a first-contact trust decision (pin %s, %s).\n' "$root" "$pin" "$verified" >&2
     printf '      Non-interactive: refusing. Provision it explicitly:\n' >&2
     printf '        vibe provision --root %s --sha %s\n' "$root" "$pin" >&2

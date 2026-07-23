@@ -322,6 +322,29 @@ git -C "$fc_app" update-index --add --cacheinfo "160000,$st_sha,.vibe/harness" 2
 if vibe_first_contact "$fc_app" "$st_dest" "$(basename "$fc_app")" "vibe-fc" </dev/null >/dev/null 2>&1; then
   echo "FAIL: first_contact did not fail closed on a non-tty" >&2; exit 1
 fi
+# …and must PROMPT (and accept a y) when stdin+stderr are a tty even though
+# stdout is captured — production callers always invoke it inside $(...), so
+# testing stdout for interactivity makes the prompt unreachable (found live on
+# the first real host first-contact). Needs a pty: util-linux script(1) only
+# (macOS script lacks -c; CI/Linux covers this branch).
+if script --version 2>/dev/null | grep -q util-linux; then
+  fc_tty="$store_tmp/fc-tty.sh"
+  cat >"$fc_tty" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+. "$repo_root/src/scripts/host/store.sh"
+dest="\$(vibe_first_contact "$fc_app" "$st_dest" "$(basename "$fc_app")" vibe-fc)" || exit 1
+[ -d "\$dest" ] || exit 2
+EOF
+  if ! printf 'y\n' | script -qe -c "bash '$fc_tty'" /dev/null >/dev/null 2>&1; then
+    echo "FAIL: first_contact did not prompt/accept under a pty (stdout captured)" >&2; exit 1
+  fi
+  fc_digest="$(vibe_checkout_digest "$fc_app")"
+  [ "$(vibe_record_get "$store_tmp/state/projects/$fc_digest" sha 2>/dev/null)" = "$st_sha" ] \
+    || { echo "FAIL: pty first_contact accept did not record trust" >&2; exit 1; }
+else
+  echo "SKIP: no util-linux script(1); first-contact pty prompt not exercised"
+fi
 chmod -R u+w "$store_tmp" 2>/dev/null || true
 rm -rf "$store_tmp"
 unset VIBE_HOME VIBE_ALLOW_INSECURE_HOME
